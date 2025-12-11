@@ -34,9 +34,14 @@ switch (command) {
     GitRepo.init();
     break;
   case COMMANDS.CAT_FILE:
-    const hash = parsedArgs["p"] as string;
-    const fileContents = GitRepo.catFile(hash);
+    const catFileHash = parsedArgs["p"] as string;
+    const fileContents = GitRepo.catFile(catFileHash);
     process.stdout.write(fileContents);
+    break;
+  case COMMANDS.HASH_OBJECT:
+    const filePath = parsedArgs["w"] as string;
+    const hashObjectHash = GitRepo.hashFile(filePath);
+    process.stdout.write(hashObjectHash);
     break;
   default:
     throw new Error(`Unknown command ${command}`);

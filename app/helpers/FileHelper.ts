@@ -15,4 +15,20 @@ export default class FileHelper {
       .toString();
     return fileContents;
   }
+
+  public static writeGitObject(hash: string, contents: string): void {
+    const subDir = hash.substring(0, 2);
+    const file = hash.substring(2);
+    const dir = path.join(GIT_DIRS.OBJECTS, subDir);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const compressed = zlib.deflateSync(contents);
+    fs.writeFileSync(path.join(dir, file), new Uint8Array(compressed));
+  }
+
+  public static getFileContents(filePath: string): string {
+    const fileContents = fs.readFileSync(filePath);
+    return fileContents.toString();
+  }
 }

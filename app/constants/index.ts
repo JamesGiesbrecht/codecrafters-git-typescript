@@ -21,4 +21,5 @@ export const GIT_FILES = {
 export const COMMANDS = {
   INIT: "init",
   CAT_FILE: "cat-file",
+  HASH_OBJECT: "hash-object",
 };
