@@ -57,3 +57,35 @@ alias mygit=/path/to/your/repo/your_program.sh
 mkdir -p /tmp/testing && cd /tmp/testing
 mygit init
 ```
+
+# Local CLI Testing
+
+1. Pull codecrafters `git-tester` submodule
+
+    ```sh
+    git submodule update --init --recursive
+    ```
+
+2. Build `git-tester` binary
+
+    ```sh
+    bun test:build
+    ```
+
+3. Install dependencies
+
+    ```sh
+    bun install
+    ```
+
+4. Create `.env` and set `CURRENT_STAGE` variable
+
+    ```sh
+    echo "CURRENT_STAGE=1" > .env
+    ```
+
+5. Run codecrafters tests locally
+
+    ```sh
+    bun test
+    ```

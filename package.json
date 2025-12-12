@@ -5,7 +5,8 @@
   },
   "description": "Build your own Git challenge, from CodeCrafters",
   "scripts": {
-    "dev": "bun run app/main.ts"
+    "dev": "bun run app/main.ts",
+    "test:build": "cd git-tester && make build"
   },
   "type": "module"
 }
