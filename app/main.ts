@@ -1,28 +1,44 @@
 import { COMMANDS } from "./constants";
 import GitRepo from "./GitRepo";
+import type { ParsedArgs } from "./types";
 
 const args = process.argv.slice(2);
 
-type ParsedArgs = {
-  [key: string]: string | boolean;
-};
-
 const parseArgs = (args: string[]): ParsedArgs => {
   const argMap: ParsedArgs = {};
+  const positional: string[] = [];
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg.startsWith("-")) {
-      // Strip leading hyphens - or --
-      const key = arg.replace(/^--?/, "");
-      let value: string | boolean = true;
-      if (args[i + 1] && !args[i + 1].startsWith("-")) {
-        value = args[i + 1];
-        // Arg was a value, skip for next iteration
-        i++;
+
+    if (arg.startsWith("--")) {
+      // Long option
+      const eqIndex = arg.indexOf("=");
+      if (eqIndex !== -1) {
+        const key = arg.slice(2, eqIndex);
+        const value = arg.slice(eqIndex + 1);
+        argMap[key] = value;
+      } else {
+        const key = arg.slice(2);
+        argMap[key] = true;
       }
-      argMap[key] = value;
+    } else if (arg.startsWith("-")) {
+      // Short option (single hyphen). Treat next token as its value if it doesn't start with '-'
+      const key = arg.replace(/^-/, "");
+      if (args[i + 1] && !args[i + 1].startsWith("-")) {
+        argMap[key] = args[i + 1];
+        i++;
+      } else {
+        argMap[key] = true;
+      }
+    } else {
+      // Positional argument
+      positional.push(arg);
     }
   }
+
+  if (positional.length > 0) argMap["_"] = positional;
+
   return argMap;
 };
 
@@ -34,14 +50,28 @@ switch (command) {
     GitRepo.init();
     break;
   case COMMANDS.CAT_FILE:
-    const catFileHash = parsedArgs["p"] as string;
-    const fileContents = GitRepo.catFile(catFileHash);
-    process.stdout.write(fileContents);
+    {
+      const positional = (parsedArgs["_"] as string[]) || [];
+      const hash = (parsedArgs["p"] as string) || positional[0];
+      const fileContents = GitRepo.catFile(hash);
+      process.stdout.write(fileContents);
+    }
     break;
   case COMMANDS.HASH_OBJECT:
-    const filePath = parsedArgs["w"] as string;
-    const hashObjectHash = GitRepo.hashFile(filePath);
-    process.stdout.write(hashObjectHash);
+    {
+      const positional = (parsedArgs["_"] as string[]) || [];
+      const filePath = (parsedArgs["w"] as string) || positional[0];
+      const hash = GitRepo.hashFile(filePath);
+      process.stdout.write(hash);
+    }
+    break;
+  case COMMANDS.LS_TREE:
+    {
+      const positional = (parsedArgs["_"] as string[]) || [];
+      const hash = (parsedArgs["p"] as string) || positional[0];
+      const tree = GitRepo.lsTree(hash, parsedArgs);
+      process.stdout.write(tree);
+    }
     break;
   default:
     throw new Error(`Unknown command ${command}`);

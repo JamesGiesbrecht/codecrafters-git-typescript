@@ -4,16 +4,14 @@ import zlib from "node:zlib";
 import { GIT_DIRS } from "../constants";
 
 export default class FileHelper {
-  public static getGitObjectContents(hash: string): string {
-    const subDir = hash.substring(0, 2);
-    const file = hash.substring(2);
-    const blob = fs.readFileSync(path.join(GIT_DIRS.OBJECTS, subDir, file));
-    const decompressedBuffer = zlib.unzipSync(new Uint8Array(blob));
-    const nullByteIndex = decompressedBuffer.indexOf(0);
-    const fileContents = decompressedBuffer
-      .subarray(nullByteIndex + 1)
-      .toString();
-    return fileContents;
+  public static loadObjectBuffer(hash: string): Buffer {
+    const file = path.join(
+      GIT_DIRS.OBJECTS,
+      hash.substring(0, 2),
+      hash.substring(2)
+    );
+    const fileContents = fs.readFileSync(file);
+    return this.decompressBuffer(fileContents);
   }
 
   public static writeGitObject(hash: string, contents: string): void {
@@ -23,12 +21,20 @@ export default class FileHelper {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const compressed = zlib.deflateSync(contents);
-    fs.writeFileSync(path.join(dir, file), new Uint8Array(compressed));
+    const compressed = this.compressBuffer(Buffer.from(contents));
+    fs.writeFileSync(path.join(dir, file), compressed);
   }
 
   public static getFileContents(filePath: string): string {
     const fileContents = fs.readFileSync(filePath);
     return fileContents.toString();
+  }
+
+  private static compressBuffer(buff: Buffer): Buffer {
+    return zlib.deflateSync(buff);
+  }
+
+  private static decompressBuffer(buff: Buffer): Buffer {
+    return zlib.inflateSync(buff);
   }
 }

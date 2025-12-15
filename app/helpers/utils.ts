@@ -1,0 +1,135 @@
+import { FileMode, GitObjectType } from "../constants";
+import FileHelper from "./FileHelper";
+import type { GitObject, GitTree, GitTreeEntry } from "../types";
+
+const ascii = {
+  null: 0,
+  space: 32,
+};
+
+type ParsedBuffer = {
+  offset: number;
+  contents: string;
+};
+
+const readBufferUntilChar = (
+  buffer: Buffer,
+  offset: number = 0,
+  asciiCode: number
+): ParsedBuffer => {
+  let contents = "";
+  while (offset < buffer.length && buffer[offset] !== asciiCode) {
+    contents += String.fromCharCode(buffer[offset]);
+    offset++;
+  }
+  offset++; // Skip the char
+  return { offset, contents };
+};
+
+export const readUntilSpace = (
+  buffer: Buffer,
+  offset: number = 0
+): ParsedBuffer => readBufferUntilChar(buffer, offset, ascii.space);
+
+export const readUntilNullByte = (
+  buffer: Buffer,
+  offset: number = 0
+): ParsedBuffer => readBufferUntilChar(buffer, offset, ascii.null);
+
+export const getFileMode = (mode: number | string): FileMode => {
+  switch (mode) {
+    case 100644:
+    case "100644":
+      return FileMode.File;
+    case 100755:
+    case "100755":
+      return FileMode.Executable;
+    case 120000:
+    case "120000":
+      return FileMode.SymbolicLink;
+    case 40000:
+    case "40000":
+    case "040000":
+      return FileMode.Directory;
+    default:
+      throw new Error(`Invalid file mode: ${mode}`);
+  }
+};
+
+export const getObjectType = (buffer: Buffer | string): GitObjectType => {
+  let type = "";
+  if (typeof buffer === "string") {
+    type = buffer;
+  } else {
+    type = readUntilSpace(buffer).contents;
+  }
+  switch (type) {
+    case "blob":
+      return GitObjectType.Blob;
+    case "tree":
+      return GitObjectType.Tree;
+    case "commit":
+      return GitObjectType.Commit;
+    case "tag":
+    default:
+      throw new Error(`Invalid object type: ${type}`);
+  }
+};
+
+export const parseObject = (buffer: Buffer): GitObject => {
+  const nullByteIndex = buffer.indexOf(0);
+  const [type, size] = buffer.subarray(0, nullByteIndex).toString().split(" ");
+  const content = buffer.subarray(nullByteIndex + 1).toString();
+
+  const object: GitObject = {
+    type: getObjectType(type),
+    size: Number(size),
+    content,
+  };
+  return object;
+};
+
+export const parseTree = (treeBuffer: Buffer): GitTree => {
+  const entries: GitTreeEntry[] = [];
+  let offset = 0;
+  let isTree: Boolean | undefined = undefined;
+  let treeSize = 0;
+
+  while (offset < treeBuffer.length) {
+    if (isTree === undefined) {
+      // Verify buffer is a tree object
+      const line = readUntilNullByte(treeBuffer, offset);
+      const [type, size] = line.contents.split(" ");
+      if (type != GitObjectType.Tree) {
+        throw new Error(`Invalid tree object: ${treeBuffer.toString()}`);
+      }
+      isTree = true;
+      treeSize = Number(size);
+      offset = line.offset;
+    }
+
+    // Read mode and filename
+    const line = readUntilNullByte(treeBuffer, offset);
+    const [mode, name] = line.contents.split(" ");
+    offset = line.offset;
+
+    // Read 20-byte SHA1 hash
+    const hash = treeBuffer.subarray(offset, offset + 20).toHex();
+    offset += 20;
+
+    const entry: GitTreeEntry = {
+      mode: getFileMode(mode),
+      type: getObjectType(FileHelper.loadObjectBuffer(hash)),
+      name,
+      hash,
+    };
+    entries.push(entry);
+  }
+
+  const tree: GitTree = {
+    size: treeSize,
+    entries,
+  };
+
+  return tree;
+};

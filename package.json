@@ -6,7 +6,8 @@
   "description": "Build your own Git challenge, from CodeCrafters",
   "scripts": {
     "dev": "bun run app/main.ts",
-    "test:build": "cd git-tester && make build"
+    "test:build": "cd git-tester && make build",
+    "challenge": "open -a 'Google Chrome' https://app.codecrafters.io/courses/git/overview"
   },
   "type": "module"
 }
