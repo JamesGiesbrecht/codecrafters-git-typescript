@@ -1,9 +1,6 @@
 import * as fs from "fs";
-import path from "path";
-import { GIT_DIRS, GIT_FILES, GitObjectType } from "./constants";
-import FileHelper from "./helpers/FileHelper";
+import { GIT_DIRS, GIT_FILES } from "./constants";
 import type { ParsedArgs } from "./types";
-import { parseTree } from "./helpers/utils";
 import { GitBlob, GitTree } from "./objects/GitObject";
 
 export default class GitRepo {
@@ -22,7 +19,7 @@ export default class GitRepo {
 
   public static hashObject(filepath: string): string {
     const blob = new GitBlob({ filepath });
-    FileHelper.writeGitObject(blob);
+    blob.write();
     return blob.hash;
   }
 
@@ -32,4 +29,9 @@ export default class GitRepo {
     return tree.ls(nameOnly);
   }
 
+  public static writeTree(dirPath: string = "."): string {
+    const tree = new GitTree({ filepath: dirPath });
+    tree.write();
+    return tree.hash;
+  }
 }

@@ -73,6 +73,14 @@ switch (command) {
       process.stdout.write(treeData);
     }
     break;
+  case COMMANDS.WRITE_TREE:
+    {
+      const positional = (parsedArgs["_"] as string[]) || [];
+      const dirPath = positional[0];
+      const treeHash = GitRepo.writeTree(dirPath);
+      process.stdout.write(treeHash);
+    }
+    break;
   default:
     throw new Error(`Unknown command ${command}`);
 }

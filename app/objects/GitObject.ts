@@ -2,10 +2,8 @@ import fs from "fs";
 import { FileMode, GIT_DIRS, GitObjectType } from "../constants";
 import {
   generateSha1Hash,
-  getFileMode,
   getFileModeFromPath,
   getObjectType,
-  parseTree,
   readUntilNullByte,
 } from "../helpers/utils";
 import FileHelper from "../helpers/FileHelper";
@@ -36,7 +34,7 @@ export abstract class GitObject {
   }
 
   get hash(): string {
-    return generateSha1Hash(this.toString());
+    return generateSha1Hash(this.toBuffer());
   }
 
   get gitDir(): string {
@@ -48,13 +46,27 @@ export abstract class GitObject {
   }
 
   get buffer(): Buffer {
-    return Buffer.from(this.toString());
+    return this.toBuffer();
   }
 
-  abstract toString(): string;
+  abstract write(): void;
+
+  abstract toBuffer(): Buffer;
+
+  toString(): string {
+    return this.toBuffer().toString();
+  }
 
   toTreeString(): string {
-    return `${this.mode} ${this.filename}\0${this.hash}`;
+    return this.toTreeBuffer().toString();
+  }
+
+  toTreeBuffer(): Buffer {
+    // mode filename\0 + 20-byte binary hash
+    // Note: for directories, git uses "40000" not "040000"
+    const modeStr = `${Number(this.mode)} ${this.filename}\0`;
+    const hashBuffer = Buffer.from(this.hash, "hex");
+    return Buffer.concat([Buffer.from(modeStr), hashBuffer]);
   }
 }
 
@@ -80,8 +92,13 @@ export class GitBlob extends GitObject {
     }
   }
 
-  toString(): string {
-    return `${this.type} ${this.size}\0${this.content}`;
+  write(): void {
+    FileHelper.writeGitObject(this);
+  }
+
+  toBuffer(): Buffer {
+    const header = `${this.type} ${this.size}\0`;
+    return Buffer.concat([Buffer.from(header), Buffer.from(this.content)]);
   }
 }
 
@@ -97,14 +114,13 @@ export class GitTree extends GitObject {
       this.parseBuffer(buffer);
     }
     if (options.filepath) {
-      throw new Error("Git tree filepath: Not Implemented");
+      this.generateTree(options.filepath);
     }
   }
 
   private parseBuffer(buffer: Buffer) {
     let offset = 0;
     let isTree: Boolean | undefined = undefined;
-    let treeSize = 0;
 
     while (offset < buffer.length) {
       if (isTree === undefined) {
@@ -115,14 +131,14 @@ export class GitTree extends GitObject {
           throw new Error(`Invalid tree object: ${buffer.toString()}`);
         }
         isTree = true;
-        treeSize = Number(size);
+        this.size = Number(size);
         offset = line.offset;
         this.content = buffer.subarray(offset).toString();
       }
 
       // Read mode and filename
       const line = readUntilNullByte(buffer, offset);
-      const [mode, name] = line.contents.split(" ");
+      const [_mode, name] = line.contents.split(" ");
       offset = line.offset;
 
       // Read 20-byte SHA1 hash
@@ -142,6 +158,19 @@ export class GitTree extends GitObject {
     }
   }
 
+  private generateTree(filepath: string) {
+    const dirContents = FileHelper.getDirectoryContents(filepath);
+    for (const entry of dirContents) {
+      const filepath = path.join(entry.parentPath, entry.name);
+      const gitObj = entry.isDirectory()
+        ? new GitTree({ filepath })
+        : new GitBlob({ filepath });
+      gitObj.filename = entry.name;
+      this.entries.push(gitObj);
+    }
+    // Sort entries by filename
+    this.entries.sort((a, b) => a.filename.localeCompare(b.filename));
+  }
 
   ls(nameOnly: boolean = false): string {
     if (nameOnly) {
@@ -171,9 +200,16 @@ export class GitTree extends GitObject {
     );
   }
 
-  toString(): string {
-    return `${this.type} ${this.size}\0${this.entries
-      .map((e) => e.toTreeString())
-      .join("\0")}`;
+  write(): void {
+    this.entries.forEach((entry) => entry.write());
+    FileHelper.writeGitObject(this);
+  }
+
+  toBuffer(): Buffer {
+    // "tree <size>\0" + entries
+    const entries = this.entries.map((e) => e.toTreeBuffer());
+    const contentBuffer = Buffer.concat(entries);
+    const header = `${this.type} ${contentBuffer.length}\0`;
+    return Buffer.concat([Buffer.from(header), contentBuffer]);
   }
 }

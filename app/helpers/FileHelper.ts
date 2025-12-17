@@ -26,7 +26,7 @@ export default class FileHelper {
 
   public static getDirectoryContents(dir: string): fs.Dirent<string>[] {
     const contents = fs
-      .readdirSync(dir, { withFileTypes: true, recursive: true })
+      .readdirSync(dir, { withFileTypes: true })
       .filter((file) => file.name != GIT_DIRS.GIT && file.name != ".git");
     // GIT_DIRS.GIT may not point to .git when run locally
     return contents;

@@ -2,8 +2,6 @@ import fs from "fs";
 import crypto from "crypto";
 import path from "path";
 import { FileMode, GitObjectType } from "../constants";
-import FileHelper from "./FileHelper";
-import type { GitTreeOld, GitTreeEntryOld } from "../types";
 
 const ascii = {
   null: 0,
@@ -102,51 +100,6 @@ export const getObjectType = (buffer: Buffer | string): GitObjectType => {
     default:
       throw new Error(`Invalid object type: ${type}`);
   }
-};
-
-export const parseTree = (treeBuffer: Buffer): GitTreeOld => {
-  const entries: GitTreeEntryOld[] = [];
-  let offset = 0;
-  let isTree: Boolean | undefined = undefined;
-  let treeSize = 0;
-
-  while (offset < treeBuffer.length) {
-    if (isTree === undefined) {
-      // Verify buffer is a tree object
-      const line = readUntilNullByte(treeBuffer, offset);
-      const [type, size] = line.contents.split(" ");
-      if (type != GitObjectType.Tree) {
-        throw new Error(`Invalid tree object: ${treeBuffer.toString()}`);
-      }
-      isTree = true;
-      treeSize = Number(size);
-      offset = line.offset;
-    }
-
-    // Read mode and filename
-    const line = readUntilNullByte(treeBuffer, offset);
-    const [mode, name] = line.contents.split(" ");
-    offset = line.offset;
-
-    // Read 20-byte SHA1 hash
-    const hash = treeBuffer.subarray(offset, offset + 20).toHex();
-    offset += 20;
-
-    const entry: GitTreeEntryOld = {
-      mode: getFileMode(mode),
-      type: getObjectType(FileHelper.loadObjectBuffer(hash)),
-      name,
-      hash,
-    };
-    entries.push(entry);
-  }
-
-  const tree: GitTreeOld = {
-    size: treeSize,
-    entries,
-  };
-
-  return tree;
 };
 
 export const generateSha1Hash = (contents: Buffer | string): string => {
