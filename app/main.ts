@@ -60,17 +60,17 @@ switch (command) {
   case COMMANDS.HASH_OBJECT:
     {
       const positional = (parsedArgs["_"] as string[]) || [];
-      const filePath = (parsedArgs["w"] as string) || positional[0];
-      const hash = GitRepo.hashFile(filePath);
+      const filepath = (parsedArgs["w"] as string) || positional[0];
+      const hash = GitRepo.hashObject(filepath);
       process.stdout.write(hash);
     }
     break;
   case COMMANDS.LS_TREE:
     {
       const positional = (parsedArgs["_"] as string[]) || [];
-      const hash = (parsedArgs["p"] as string) || positional[0];
-      const tree = GitRepo.lsTree(hash, parsedArgs);
-      process.stdout.write(tree);
+      const hash = positional[0];
+      const treeData = GitRepo.lsTree(hash, parsedArgs);
+      process.stdout.write(treeData);
     }
     break;
   default:

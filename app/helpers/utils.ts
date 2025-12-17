@@ -1,6 +1,9 @@
+import fs from "fs";
+import crypto from "crypto";
+import path from "path";
 import { FileMode, GitObjectType } from "../constants";
 import FileHelper from "./FileHelper";
-import type { GitObject, GitTree, GitTreeEntry } from "../types";
+import type { GitTreeOld, GitTreeEntryOld } from "../types";
 
 const ascii = {
   null: 0,
@@ -36,24 +39,49 @@ export const readUntilNullByte = (
   offset: number = 0
 ): ParsedBuffer => readBufferUntilChar(buffer, offset, ascii.null);
 
-export const getFileMode = (mode: number | string): FileMode => {
-  switch (mode) {
-    case 100644:
-    case "100644":
-      return FileMode.File;
-    case 100755:
-    case "100755":
-      return FileMode.Executable;
-    case 120000:
-    case "120000":
-      return FileMode.SymbolicLink;
-    case 40000:
-    case "40000":
-    case "040000":
-      return FileMode.Directory;
-    default:
-      throw new Error(`Invalid file mode: ${mode}`);
+export const getFileModeFromPath = (path: string): FileMode => {
+  try {
+    fs.accessSync(path, fs.constants.X_OK);
+    return FileMode.Executable;
+  } catch {
+    return FileMode.File;
   }
+};
+
+const getDirentFileMode = (dirent: fs.Dirent): FileMode => {
+  if (dirent.isDirectory()) {
+    return FileMode.Directory;
+  }
+  if (dirent.isFile()) {
+    return getFileModeFromPath(path.join(dirent.parentPath, dirent.name));
+  }
+  if (dirent.isSymbolicLink()) {
+    return FileMode.SymbolicLink;
+  }
+  throw new Error(`Invalid file mode: ${dirent.name}`);
+};
+
+export const getFileMode = (mode: number | string | fs.Dirent): FileMode => {
+  if (typeof mode === "number" || typeof mode === "string") {
+    switch (mode) {
+      case 100644:
+      case "100644":
+        return FileMode.File;
+      case 100755:
+      case "100755":
+        return FileMode.Executable;
+      case 120000:
+      case "120000":
+        return FileMode.SymbolicLink;
+      case 40000:
+      case "40000":
+      case "040000":
+        return FileMode.Directory;
+      default:
+        throw new Error(`Invalid file mode: ${mode}`);
+    }
+  }
+  return getDirentFileMode(mode);
 };
 
 export const getObjectType = (buffer: Buffer | string): GitObjectType => {
@@ -76,21 +104,8 @@ export const getObjectType = (buffer: Buffer | string): GitObjectType => {
   }
 };
 
-export const parseObject = (buffer: Buffer): GitObject => {
-  const nullByteIndex = buffer.indexOf(0);
-  const [type, size] = buffer.subarray(0, nullByteIndex).toString().split(" ");
-  const content = buffer.subarray(nullByteIndex + 1).toString();
-
-  const object: GitObject = {
-    type: getObjectType(type),
-    size: Number(size),
-    content,
-  };
-  return object;
-};
-
-export const parseTree = (treeBuffer: Buffer): GitTree => {
-  const entries: GitTreeEntry[] = [];
+export const parseTree = (treeBuffer: Buffer): GitTreeOld => {
+  const entries: GitTreeEntryOld[] = [];
   let offset = 0;
   let isTree: Boolean | undefined = undefined;
   let treeSize = 0;
@@ -117,7 +132,7 @@ export const parseTree = (treeBuffer: Buffer): GitTree => {
     const hash = treeBuffer.subarray(offset, offset + 20).toHex();
     offset += 20;
 
-    const entry: GitTreeEntry = {
+    const entry: GitTreeEntryOld = {
       mode: getFileMode(mode),
       type: getObjectType(FileHelper.loadObjectBuffer(hash)),
       name,
@@ -126,10 +141,14 @@ export const parseTree = (treeBuffer: Buffer): GitTree => {
     entries.push(entry);
   }
 
-  const tree: GitTree = {
+  const tree: GitTreeOld = {
     size: treeSize,
     entries,
   };
 
   return tree;
+};
+
+export const generateSha1Hash = (contents: Buffer | string): string => {
+  return crypto.createHash("sha1").update(contents).digest("hex");
 };

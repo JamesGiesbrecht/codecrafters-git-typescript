@@ -11,9 +11,14 @@ export enum FileMode {
   Executable = "100755",
   SymbolicLink = "120000",
   Directory = "040000",
+  Unknown = 0,
 }
 
-const GIT_DIR = ".git";
+const { NODE_ENV } = process.env;
+let GIT_DIR = ".fakegit";
+if (NODE_ENV === "cc" || NODE_ENV === "test") {
+  GIT_DIR = ".git";
+}
 
 export const GIT_DIRS = {
   GIT: GIT_DIR,
@@ -31,4 +36,5 @@ export const COMMANDS = {
   CAT_FILE: "cat-file",
   HASH_OBJECT: "hash-object",
   LS_TREE: "ls-tree",
+  WRITE_TREE: "write-tree",
 };

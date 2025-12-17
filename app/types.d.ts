@@ -4,21 +4,14 @@ export type ParsedArgs = {
   [key: string]: string | boolean | string[];
 };
 
-export interface GitTree {
+export interface GitTreeOld {
   size: number;
-  entries: GitTreeEntry[];
+  entries: GitTreeEntryOld[];
 }
 
-export interface GitTreeEntry {
+export interface GitTreeEntryOld {
   mode: FileMode;
   type: GitObjectType;
   name: string;
   hash: string;
-}
-
-export interface GitObject {
-  type: GitObjectType;
-  size: number;
-  content: string;
-  hash?: string;
 }
