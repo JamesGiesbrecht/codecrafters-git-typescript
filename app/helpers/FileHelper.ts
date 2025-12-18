@@ -5,11 +5,11 @@ import { GIT_DIRS } from "../constants";
 import type { GitObject } from "../objects/GitObject";
 
 export default class FileHelper {
-  public static loadObjectBuffer(hash: string): Buffer {
+  public static loadObjectBuffer(sha: string): Buffer {
     const file = path.join(
       GIT_DIRS.OBJECTS,
-      hash.substring(0, 2),
-      hash.substring(2)
+      sha.substring(0, 2),
+      sha.substring(2)
     );
     const fileContents = fs.readFileSync(file);
     return this.decompressBuffer(fileContents);

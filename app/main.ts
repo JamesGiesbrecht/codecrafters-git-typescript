@@ -1,12 +1,11 @@
-import { COMMANDS } from "./constants";
+import { COMMANDS, DEFAULT_PARSED_ARGS } from "./constants";
 import GitRepo from "./GitRepo";
 import type { ParsedArgs } from "./types";
 
 const args = process.argv.slice(2);
 
 const parseArgs = (args: string[]): ParsedArgs => {
-  const argMap: ParsedArgs = {};
-  const positional: string[] = [];
+  const argMap: ParsedArgs = DEFAULT_PARSED_ARGS;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -33,11 +32,9 @@ const parseArgs = (args: string[]): ParsedArgs => {
       }
     } else {
       // Positional argument
-      positional.push(arg);
+      argMap.positional.push(arg);
     }
   }
-
-  if (positional.length > 0) argMap["_"] = positional;
 
   return argMap;
 };
@@ -51,34 +48,39 @@ switch (command) {
     break;
   case COMMANDS.CAT_FILE:
     {
-      const positional = (parsedArgs["_"] as string[]) || [];
-      const hash = (parsedArgs["p"] as string) || positional[0];
-      const fileContents = GitRepo.catFile(hash);
+      const sha = (parsedArgs["p"] as string) || parsedArgs.positional[0];
+      const fileContents = GitRepo.catFile(sha);
       process.stdout.write(fileContents);
     }
     break;
   case COMMANDS.HASH_OBJECT:
     {
-      const positional = (parsedArgs["_"] as string[]) || [];
-      const filepath = (parsedArgs["w"] as string) || positional[0];
-      const hash = GitRepo.hashObject(filepath);
-      process.stdout.write(hash);
+      const filepath = (parsedArgs["w"] as string) || parsedArgs.positional[0];
+      const sha = GitRepo.hashObject(filepath);
+      process.stdout.write(sha);
     }
     break;
   case COMMANDS.LS_TREE:
     {
-      const positional = (parsedArgs["_"] as string[]) || [];
-      const hash = positional[0];
-      const treeData = GitRepo.lsTree(hash, parsedArgs);
+      const sha = parsedArgs.positional[0];
+      const treeData = GitRepo.lsTree(sha, parsedArgs);
       process.stdout.write(treeData);
     }
     break;
   case COMMANDS.WRITE_TREE:
     {
-      const positional = (parsedArgs["_"] as string[]) || [];
-      const dirPath = positional[0];
-      const treeHash = GitRepo.writeTree(dirPath);
-      process.stdout.write(treeHash);
+      const dirPath = parsedArgs.positional[0];
+      const treeSha = GitRepo.writeTree(dirPath);
+      process.stdout.write(treeSha);
+    }
+    break;
+  case COMMANDS.COMMIT_TREE:
+    {
+      const treeSha = parsedArgs.positional[0];
+      const parentSha = parsedArgs["p"] as string;
+      const message = parsedArgs["m"] as string;
+      const commitSha = GitRepo.commitTree(treeSha, parentSha, message);
+      process.stdout.write(commitSha);
     }
     break;
   default:

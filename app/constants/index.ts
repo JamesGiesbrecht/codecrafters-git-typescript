@@ -1,4 +1,5 @@
 import path from "path";
+import type { GitIdentity, ParsedArgs } from "../types";
 
 export enum GitObjectType {
   Commit = "commit",
@@ -37,4 +38,14 @@ export const COMMANDS = {
   HASH_OBJECT: "hash-object",
   LS_TREE: "ls-tree",
   WRITE_TREE: "write-tree",
+  COMMIT_TREE: "commit-tree",
+};
+
+export const DEFAULT_IDENTITY: GitIdentity = {
+  name: "Linus Torvalds",
+  email: "ltorvalds@localhost",
+};
+
+export const DEFAULT_PARSED_ARGS: ParsedArgs = {
+  positional: [],
 };

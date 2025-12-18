@@ -105,3 +105,14 @@ export const getObjectType = (buffer: Buffer | string): GitObjectType => {
 export const generateSha1Hash = (contents: Buffer | string): string => {
   return crypto.createHash("sha1").update(contents).digest("hex");
 };
+
+export const getTimezoneOffsetString = (date: Date): string => {
+  const offsetMinutes = date.getTimezoneOffset();
+  const sign = offsetMinutes > 0 ? "-" : "+";
+  const abs = Math.abs(offsetMinutes);
+
+  const hours = String(Math.floor(abs / 60)).padStart(2, "0");
+  const minutes = String(abs % 60).padStart(2, "0");
+
+  return `${sign}${hours}${minutes}`;
+};

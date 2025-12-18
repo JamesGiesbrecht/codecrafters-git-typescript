@@ -1,7 +1,7 @@
 import * as fs from "fs";
-import { GIT_DIRS, GIT_FILES } from "./constants";
+import { DEFAULT_PARSED_ARGS, GIT_DIRS, GIT_FILES } from "./constants";
 import type { ParsedArgs } from "./types";
-import { GitBlob, GitTree } from "./objects/GitObject";
+import { GitBlob, GitCommit, GitTree } from "./objects/GitObject";
 
 export default class GitRepo {
   public static async init() {
@@ -12,19 +12,22 @@ export default class GitRepo {
     console.log("Initialized git directory");
   }
 
-  public static catFile(hash: string): string {
-    const blob = new GitBlob({ hash });
+  public static catFile(sha: string): string {
+    const blob = new GitBlob({ sha });
     return blob.content;
   }
 
   public static hashObject(filepath: string): string {
     const blob = new GitBlob({ filepath });
     blob.write();
-    return blob.hash;
+    return blob.shaHash;
   }
 
-  public static lsTree(hash: string, flags: ParsedArgs = {}): string {
-    const tree = new GitTree({ hash });
+  public static lsTree(
+    sha: string,
+    flags: ParsedArgs = DEFAULT_PARSED_ARGS
+  ): string {
+    const tree = new GitTree({ sha });
     const nameOnly = flags["name-only"] === true;
     return tree.ls(nameOnly);
   }
@@ -32,6 +35,16 @@ export default class GitRepo {
   public static writeTree(dirPath: string = "."): string {
     const tree = new GitTree({ filepath: dirPath });
     tree.write();
-    return tree.hash;
+    return tree.shaHash;
+  }
+
+  public static commitTree(
+    treeSha: string,
+    parentSha: string,
+    message: string
+  ): string {
+    const commit = new GitCommit(treeSha, parentSha, message);
+    commit.write();
+    return commit.shaHash;
   }
 }
