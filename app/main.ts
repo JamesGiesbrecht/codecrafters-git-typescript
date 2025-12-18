@@ -83,6 +83,13 @@ switch (command) {
       process.stdout.write(commitSha);
     }
     break;
+  case COMMANDS.CLONE:
+    {
+      const url = parsedArgs.positional[0];
+      const dest = parsedArgs.positional[1];
+      await GitRepo.clone(url, dest);
+    }
+    break;
   default:
     throw new Error(`Unknown command ${command}`);
 }

@@ -1,7 +1,9 @@
 import * as fs from "fs";
 import { DEFAULT_PARSED_ARGS, GIT_DIRS, GIT_FILES } from "./constants";
 import type { ParsedArgs } from "./types";
-import { GitBlob, GitCommit, GitTree } from "./objects/GitObject";
+import { GitBlob, GitCommit, GitTree } from "./objects";
+import GitHelper from "./helpers/GitHelper";
+import path from "path";
 
 export default class GitRepo {
   public static async init() {
@@ -46,5 +48,13 @@ export default class GitRepo {
     const commit = new GitCommit(treeSha, parentSha, message);
     commit.write();
     return commit.shaHash;
+  }
+
+  public static async clone(url: string, dest: string): Promise<void> {
+    if (!dest) {
+      dest = path.basename(url, ".git");
+    }
+    console.log(`Cloning "${url}" to "${dest}"`);
+    await GitHelper.clone(url, dest);
   }
 }

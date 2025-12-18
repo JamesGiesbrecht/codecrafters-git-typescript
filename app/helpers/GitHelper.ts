@@ -2,9 +2,9 @@ import fs from "fs";
 import path from "path";
 import zlib from "node:zlib";
 import { GIT_DIRS } from "../constants";
-import type { GitObject } from "../objects/GitObject";
+import type { GitObject } from "../objects";
 
-export default class FileHelper {
+export default class GitHelper {
   public static loadObjectBuffer(sha: string): Buffer {
     const file = path.join(
       GIT_DIRS.OBJECTS,
@@ -30,6 +30,10 @@ export default class FileHelper {
       .filter((file) => file.name != GIT_DIRS.GIT && file.name != ".git");
     // GIT_DIRS.GIT may not point to .git when run locally
     return contents;
+  }
+
+  public static async clone(url: string, dest: string): Promise<void> {
+    throw new Error("Clone not implemented");
   }
 
   private static compressBuffer(buff: Buffer): Buffer {

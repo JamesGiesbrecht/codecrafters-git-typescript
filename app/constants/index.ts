@@ -39,6 +39,7 @@ export const COMMANDS = {
   LS_TREE: "ls-tree",
   WRITE_TREE: "write-tree",
   COMMIT_TREE: "commit-tree",
+  CLONE: "clone",
 };
 
 export const DEFAULT_IDENTITY: GitIdentity = {

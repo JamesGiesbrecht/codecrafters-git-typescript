@@ -12,11 +12,11 @@ import {
   getTimezoneOffsetString,
   readUntilNullByte,
 } from "../helpers/utils";
-import FileHelper from "../helpers/FileHelper";
+import GitHelper from "../helpers/GitHelper";
 import path from "path";
 import type { GitIdentity } from "../types";
 
-type GitObjectOptions = {
+export type GitObjectOptions = {
   sha?: string;
   filepath?: string;
 };
@@ -64,7 +64,7 @@ export abstract class GitObject {
   }
 }
 
-abstract class GitFileObject extends GitObject {
+export abstract class GitFileObject extends GitObject {
   abstract mode: FileMode;
 
   toTreeString(): string {
@@ -77,200 +77,5 @@ abstract class GitFileObject extends GitObject {
     const modeStr = `${Number(this.mode)} ${this.filename}\0`;
     const shaBuffer = Buffer.from(this.shaHash, "hex");
     return Buffer.concat([Buffer.from(modeStr), shaBuffer]);
-  }
-}
-
-export class GitBlob extends GitFileObject {
-  type: GitObjectType = GitObjectType.Blob;
-
-  get mode(): FileMode {
-    return getFileModeFromPath(this.gitDir);
-  }
-
-  constructor(options: GitObjectOptions = {}) {
-    super(options);
-
-    if (options.sha) {
-      const buffer = FileHelper.loadObjectBuffer(options.sha);
-      const line = readUntilNullByte(buffer);
-      const [type, size] = line.contents.split(" ");
-      if (type != GitObjectType.Blob) {
-        throw new Error(`Invalid type ${type}`);
-      }
-      this.size = Number(size);
-      this.content = buffer.subarray(line.offset).toString();
-    }
-  }
-
-  write(): void {
-    FileHelper.writeGitObject(this);
-  }
-
-  toBuffer(): Buffer {
-    const header = `${this.type} ${this.size}\0`;
-    return Buffer.concat([Buffer.from(header), Buffer.from(this.content)]);
-  }
-}
-
-export class GitTree extends GitFileObject {
-  type: GitObjectType = GitObjectType.Tree;
-  mode: FileMode = FileMode.Directory;
-  entries: GitFileObject[] = [];
-
-  constructor(options: GitObjectOptions = {}) {
-    super(options, GitObjectType.Tree);
-    if (options.sha) {
-      const buffer = FileHelper.loadObjectBuffer(options.sha);
-      this.parseBuffer(buffer);
-    }
-    if (options.filepath) {
-      this.generateTree(options.filepath);
-    }
-  }
-
-  private parseBuffer(buffer: Buffer) {
-    let offset = 0;
-    let isTree: Boolean | undefined = undefined;
-
-    while (offset < buffer.length) {
-      if (isTree === undefined) {
-        // Verify buffer is a tree object
-        const line = readUntilNullByte(buffer, offset);
-        const [type, size] = line.contents.split(" ");
-        if (type != GitObjectType.Tree) {
-          throw new Error(`Invalid tree object: ${buffer.toString()}`);
-        }
-        isTree = true;
-        this.size = Number(size);
-        offset = line.offset;
-        this.content = buffer.subarray(offset).toString();
-      }
-
-      // Read mode and filename
-      const line = readUntilNullByte(buffer, offset);
-      const [_mode, name] = line.contents.split(" ");
-      offset = line.offset;
-
-      // Read 20-byte SHA1 hash
-      const sha = buffer.subarray(offset, offset + 20).toHex();
-      offset += 20;
-
-      const type = getObjectType(FileHelper.loadObjectBuffer(sha));
-      if (type == GitObjectType.Tree) {
-        const subTree = new GitTree({ sha });
-        subTree.filename = name;
-        this.entries.push(subTree);
-      } else {
-        const blob = new GitBlob({ sha });
-        blob.filename = name;
-        this.entries.push(blob);
-      }
-    }
-  }
-
-  private generateTree(filepath: string) {
-    const dirContents = FileHelper.getDirectoryContents(filepath);
-    for (const entry of dirContents) {
-      const filepath = path.join(entry.parentPath, entry.name);
-      const gitObj = entry.isDirectory()
-        ? new GitTree({ filepath })
-        : new GitBlob({ filepath });
-      gitObj.filename = entry.name;
-      this.entries.push(gitObj);
-    }
-    this.size = Buffer.concat(this.entries.map((e) => e.toTreeBuffer())).length;
-    // Sort entries by filename
-    this.entries.sort((a, b) => a.filename.localeCompare(b.filename));
-  }
-
-  ls(nameOnly: boolean = false): string {
-    if (nameOnly) {
-      /**
-       * <file1>
-       * <file2>
-       * <file3>
-       */
-      return (
-        this.entries.map((e) => e.filename).join("\n") +
-        (this.entries.length > 0 ? "\n" : "")
-      );
-    }
-    /**
-     * 100644 blob 37cef192599bc823c9575a9a04bf71ff665ac516    <file1>
-     * 040000 tree fdb70afa78cb712038679107e90c846946a48747    <dir1>
-     * 040000 tree f06e35fbb333349bbe7e3f65380181e482e09d40    <dir2>
-     * 100644 blob d92d1f55d80143cb7ed5a685a523a63cf0ec3c93    <file2>
-     */
-    return (
-      this.entries
-        .map(
-          (entry) =>
-            `${entry.mode} ${entry.type} ${entry.shaHash}    ${entry.filename}`
-        )
-        .join("\n") + (this.entries.length > 0 ? "\n" : "")
-    );
-  }
-
-  write(): void {
-    this.entries.forEach((entry) => entry.write());
-    FileHelper.writeGitObject(this);
-  }
-
-  toBuffer(): Buffer {
-    // "tree <size>\0" + entries
-    const entries = this.entries.map((e) => e.toTreeBuffer());
-    const contentBuffer = Buffer.concat(entries);
-    const header = `${this.type} ${this.size}\0`;
-    return Buffer.concat([Buffer.from(header), contentBuffer]);
-  }
-}
-
-export class GitCommit extends GitObject {
-  type: GitObjectType = GitObjectType.Commit;
-  treeSha: string;
-  parentSha: string;
-  author: GitIdentity = DEFAULT_IDENTITY;
-  committer: GitIdentity = DEFAULT_IDENTITY;
-  timestamp: Date = new Date();
-  message: string;
-
-  constructor(treeSha: string, parentSha: string, message: string) {
-    super();
-    this.treeSha = treeSha;
-    this.parentSha = parentSha;
-    this.message = message;
-  }
-
-  private get formattedTimestamp() {
-    return `${Math.floor(
-      this.timestamp.getTime() / 1000
-    )} ${getTimezoneOffsetString(this.timestamp)}`;
-  }
-
-  write(): void {
-    FileHelper.writeGitObject(this);
-  }
-
-  toBuffer(): Buffer {
-    /**
-     * commit <size>\0tree <tree_sha>
-     * parent <parent_sha>
-     * author <name> <<email>> <timestamp> <timezone>
-     * committer <name> <<email>> <timestamp> <timezone>
-     *
-     * <commit message>
-     */
-    const tree = `tree ${this.treeSha}`;
-    const parent = `parent ${this.parentSha}`;
-    const author = `author ${this.author.name} <${this.author.email}> ${this.formattedTimestamp}`;
-    const committer = `committer ${this.author.name} <${this.author.email}> ${this.formattedTimestamp}`;
-    const commitBody = Buffer.from(
-      [tree, parent, author, committer, "", `${this.message}\n`].join("\n")
-    );
-
-    this.size = commitBody.length;
-    const header = Buffer.from(`${this.type} ${this.size}\0`);
-
-    return Buffer.concat([header, commitBody]);
   }
 }
