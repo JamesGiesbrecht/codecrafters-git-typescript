@@ -116,3 +116,15 @@ export const getTimezoneOffsetString = (date: Date): string => {
 
   return `${sign}${hours}${minutes}`;
 };
+
+export const hexToDecimal = (hexStr: string): number => {
+  return parseInt(hexStr, 16);
+};
+
+// export const decodeHex = (hexStr: string): string => {
+//   return Buffer.from(hexStr, "hex").toString();
+// };
+
+export const stripNewlines = (str: string): string => {
+  return str.replaceAll("\n", "");
+};

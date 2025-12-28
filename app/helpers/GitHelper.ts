@@ -32,10 +32,6 @@ export default class GitHelper {
     return contents;
   }
 
-  public static async clone(url: string, dest: string): Promise<void> {
-    throw new Error("Clone not implemented");
-  }
-
   private static compressBuffer(buff: Buffer): Buffer {
     return zlib.deflateSync(buff);
   }

@@ -50,3 +50,9 @@ export const DEFAULT_IDENTITY: GitIdentity = {
 export const DEFAULT_PARSED_ARGS: ParsedArgs = {
   positional: [],
 };
+
+export const CONSTANTS = {
+  FLUSH_PKT: "0000",
+  HEAD: "HEAD",
+  NULL_BYTE: "\0",
+};
