@@ -4,7 +4,7 @@ import type { ParsedArgs } from "./types";
 import { GitBlob, GitCommit, GitTree } from "./objects";
 import GitHelper from "./helpers/GitHelper";
 import path from "path";
-import GitClone from "./helpers/GitClone";
+import { clone } from "./helpers/GitClone";
 
 export default class GitRepo {
   public static async init() {
@@ -59,6 +59,6 @@ export default class GitRepo {
       dest = path.basename(url, ".git");
     }
     console.log(`Cloning "${url}" to "${dest}"`);
-    await GitClone.clone(url, dest);
+    await clone(url, dest);
   }
 }

@@ -121,10 +121,21 @@ export const hexToDecimal = (hexStr: string): number => {
   return parseInt(hexStr, 16);
 };
 
+export const decimalToHex = (num: number): string => {
+  // Padded to 4 bytes
+  // EX: 001e
+  return num.toString(16).padStart(4, "0");
+};
+
 // export const decodeHex = (hexStr: string): string => {
 //   return Buffer.from(hexStr, "hex").toString();
 // };
 
 export const stripNewlines = (str: string): string => {
   return str.replaceAll("\n", "");
+};
+
+export const withSizeHeader = (str: string): string => {
+  // Add 4 bytes for length header
+  return decimalToHex(str.length + 4) + str;
 };

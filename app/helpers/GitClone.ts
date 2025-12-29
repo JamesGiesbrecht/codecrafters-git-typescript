@@ -1,5 +1,5 @@
 import { CONSTANTS } from "../constants";
-import { hexToDecimal, stripNewlines } from "./utils";
+import { hexToDecimal, withSizeHeader, stripNewlines } from "./utils";
 
 const { FLUSH_PKT, HEAD, NULL_BYTE } = CONSTANTS;
 
@@ -18,97 +18,146 @@ const { FLUSH_PKT, HEAD, NULL_BYTE } = CONSTANTS;
 
 interface ReferenceFile {
   headSha: string; // Points to the HEAD pack file
-  refs: { sha: string; ref: string }[];
-  capabilities?: string;
+  refs: { sha: string; name: string }[];
+  capabilities?: string[];
 }
 
 const urlPaths = {
   refs: "/info/refs?",
+  gitUploadPack: "/git-upload-pack",
 };
 
 const services = {
   gitUploadPack: "service=git-upload-pack",
 };
 
-export default class GitClone {
-  public static async clone(url: string, dest: string): Promise<void> {
-    const res = await fetch(url + urlPaths.refs + services.gitUploadPack);
-    const validStatusCodes = [200, 304];
-    if (!validStatusCodes.includes(res.status)) {
-      throw new Error(`Invalid status code: ${res.status}`);
+export const clone = async (url: string, dest: string): Promise<void> => {
+  const refFile = await fetchRefs(url);
+  const wantLines: WantLine[] = refFile.refs.map(
+    (ref) => new WantLine(ref.sha)
+  );
+  const packFiles = await fetchPackFiles(url, wantLines);
+  // console.log({ refFile, refs: refFile.refs });
+  throw new Error("Clone not implemented");
+};
+
+const fetchRefs = async (url: string): Promise<ReferenceFile> => {
+  const res = await fetch(url + urlPaths.refs + services.gitUploadPack);
+  if (!res.ok && res.status !== 304) {
+    throw new Error(`Failed to fetch ref file: ${res.statusText}`);
+  }
+  const text = await res.text();
+
+  if (text.slice(-4) !== FLUSH_PKT) {
+    throw new Error(
+      `Reference file missing flush packet at end of response. Actual: "${text}"`
+    );
+  }
+  const lines = parsePayload(text);
+  // Verify response begins with the service name
+  if (lines[0] !== `# ${services.gitUploadPack}`) {
+    console.log(services.gitUploadPack);
+    throw new Error(`Invalid reference file header: "${lines[0]}"`);
+  }
+  const refFile: ReferenceFile = {
+    headSha: "",
+    refs: [],
+  };
+
+  // Skip service name line
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    console.log(`line ${i}: ${line}`);
+
+    if (line.includes(NULL_BYTE)) {
+      const [head, capabilities] = line.split(NULL_BYTE);
+      refFile.headSha = head.split(" ")[0];
+      refFile.capabilities = capabilities.split(" ");
+    } else {
+      const [sha, ref] = line.split(" ");
+      refFile.refs.push({ sha, name: ref });
     }
-    const text = await res.text();
-    const refFile = this.parseReferenceFile(text);
-    console.log({ refFile, refs: refFile.refs });
-    throw new Error("Clone not implemented");
   }
 
-  private static parsePayload(payload: string): string[] {
-    const referenceFileValidationRegex = /^[0-9a-f]{4}#/;
-    const validationBytes = payload.slice(0, 6);
-    if (!validationBytes.match(referenceFileValidationRegex)) {
-      throw new Error(
-        `Invalid reference file pack. First 5 bytes must match ${referenceFileValidationRegex}. Actual: ${validationBytes}`
-      );
-    }
+  return refFile;
+};
 
-    const buffer = Buffer.from(payload);
-    let offset = 0;
-    const lines: string[] = [];
+const fetchPackFiles = async (
+  url: string,
+  wantLines: WantLine[]
+): Promise<void> => {
+  const body = Buffer.concat([
+    ...wantLines.map((wl) => wl.toBuffer()),
+    Buffer.from(`${FLUSH_PKT}${withSizeHeader("done\n")}`),
+  ]);
 
-    while (offset < buffer.length) {
-      const pktLenStr = buffer.subarray(offset, offset + 4).toString();
+  const res = await fetch(url + urlPaths.gitUploadPack, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-git-upload-pack-request",
+    },
+    body,
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch pack file: ${res.statusText}`);
+  }
+  const text = await res.text();
+  console.log({ text });
+  // const blob = await res.blob();
+  // console.log({ blob: await blob.arrayBuffer() });
+};
 
-      // console.log(`pktLenStr: ${pktLenStr}`);
-      // Exclude flush packets from response
-      if (pktLenStr === FLUSH_PKT) {
-        // Flush byte
-        offset += 4;
-        continue;
-      }
-      const pktLen = hexToDecimal(pktLenStr);
-      const pktPayload = buffer
-        .subarray(offset + 4, offset + pktLen)
-        .toString();
-      // console.log({ pktLen, pktPayload });
-      lines.push(stripNewlines(pktPayload));
-      offset += pktLen;
-    }
-    return lines;
+const parsePayload = (payload: string): string[] => {
+  const referenceFileValidationRegex = /^[0-9a-f]{4}#/;
+  const validationBytes = payload.slice(0, 6);
+  if (!validationBytes.match(referenceFileValidationRegex)) {
+    throw new Error(
+      `Invalid reference file pack. First 5 bytes must match ${referenceFileValidationRegex}. Actual: ${validationBytes}`
+    );
   }
 
-  private static parseReferenceFile(text: string): ReferenceFile {
-    if (text.slice(-4) !== FLUSH_PKT) {
-      throw new Error(
-        `Reference file missing flush packet at end of response. Actual: "${text}"`
-      );
-    }
-    const lines = this.parsePayload(text);
-    // Verify response begins with the service name
-    if (lines[0] !== `# ${services.gitUploadPack}`) {
-      console.log(services.gitUploadPack);
-      throw new Error(`Invalid reference file header: "${lines[0]}"`);
-    }
-    const refFile: ReferenceFile = {
-      headSha: "",
-      refs: [],
-    };
+  const buffer = Buffer.from(payload);
+  let offset = 0;
+  const lines: string[] = [];
 
-    // Skip service name line
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      console.log(`line ${i}: ${line}`);
+  while (offset < buffer.length) {
+    const pktLenStr = buffer.subarray(offset, offset + 4).toString();
 
-      if (line.includes(NULL_BYTE)) {
-        const [head, capabilities] = line.split(NULL_BYTE);
-        refFile.headSha = head.split(" ")[0];
-        refFile.capabilities = capabilities;
-      } else {
-        const [sha, ref] = line.split(" ");
-        refFile.refs.push({ sha, ref });
-      }
+    // console.log(`pktLenStr: ${pktLenStr}`);
+    // Exclude flush packets from response
+    if (pktLenStr === FLUSH_PKT) {
+      // Flush byte
+      offset += 4;
+      continue;
     }
+    const pktLen = hexToDecimal(pktLenStr);
+    const pktPayload = buffer.subarray(offset + 4, offset + pktLen).toString();
+    // console.log({ pktLen, pktPayload });
+    lines.push(stripNewlines(pktPayload));
+    offset += pktLen;
+  }
+  return lines;
+};
 
-    return refFile;
+class WantLine {
+  private capabilities: string = "";
+
+  constructor(private hash: string) {}
+
+  private get wantStr() {
+    if (this.capabilities) {
+      return `want ${this.hash} ${this.capabilities}\n`;
+    }
+    return `want ${this.hash}\n`;
+  }
+
+  toString() {
+    return withSizeHeader(this.wantStr);
+  }
+
+  toBuffer() {
+    return Buffer.from(this.toString());
   }
 }
+
+class PackFile {}
