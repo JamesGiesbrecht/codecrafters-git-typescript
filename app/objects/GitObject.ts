@@ -1,9 +1,9 @@
 import fs from "fs";
 import {
   DEFAULT_IDENTITY,
-  FileMode,
+  FileModeEnum,
   GIT_DIRS,
-  GitObjectType,
+  GitObjectTypeEnum,
 } from "../constants";
 import {
   generateSha1Hash,
@@ -22,16 +22,16 @@ export type GitObjectOptions = {
 };
 
 export abstract class GitObject {
-  abstract type: GitObjectType;
+  abstract type: GitObjectTypeEnum;
   size: number = 0;
   content: string = "";
   filename: string = "";
 
   constructor(
     options: GitObjectOptions = {},
-    type: GitObjectType = GitObjectType.Blob
+    type: GitObjectTypeEnum = GitObjectTypeEnum.Blob
   ) {
-    if (options.filepath && type === GitObjectType.Blob) {
+    if (options.filepath && type === GitObjectTypeEnum.Blob) {
       const fileContents = fs.readFileSync(options.filepath).toString();
       this.size = fileContents.length;
       this.content = fileContents;
@@ -65,7 +65,7 @@ export abstract class GitObject {
 }
 
 export abstract class GitFileObject extends GitObject {
-  abstract mode: FileMode;
+  abstract mode: FileModeEnum;
 
   toTreeString(): string {
     return this.toTreeBuffer().toString();

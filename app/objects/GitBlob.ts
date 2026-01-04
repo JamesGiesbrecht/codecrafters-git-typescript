@@ -1,12 +1,12 @@
-import { FileMode, GitObjectType } from "../constants";
+import { FileModeEnum, GitObjectTypeEnum } from "../constants";
 import { getFileModeFromPath, readUntilNullByte } from "../helpers/utils";
 import GitHelper from "../helpers/GitHelper";
 import { GitFileObject, type GitObjectOptions } from "./GitObject";
 
 export class GitBlob extends GitFileObject {
-  type: GitObjectType = GitObjectType.Blob;
+  type: GitObjectTypeEnum = GitObjectTypeEnum.Blob;
 
-  get mode(): FileMode {
+  get mode(): FileModeEnum {
     return getFileModeFromPath(this.gitDir);
   }
 
@@ -17,7 +17,7 @@ export class GitBlob extends GitFileObject {
       const buffer = GitHelper.loadObjectBuffer(options.sha);
       const line = readUntilNullByte(buffer);
       const [type, size] = line.contents.split(" ");
-      if (type != GitObjectType.Blob) {
+      if (type != GitObjectTypeEnum.Blob) {
         throw new Error(`Invalid type ${type}`);
       }
       this.size = Number(size);

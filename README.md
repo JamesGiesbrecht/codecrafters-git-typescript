@@ -98,3 +98,4 @@ mygit init
 - [git http-protocol](https://git-scm.com/docs/http-protocol)
 - [git protocol-pack](https://git-scm.com/docs/gitprotocol-pack)
 - [git format-pack](https://git-scm.com/docs/gitformat-pack)
+- [Unpacking Git Packfiles](https://codewords.recurse.com/issues/three/unpacking-git-packfiles)

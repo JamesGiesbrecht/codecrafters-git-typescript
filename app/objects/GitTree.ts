@@ -1,4 +1,4 @@
-import { FileMode, GitObjectType } from "../constants";
+import { FileModeEnum, GitObjectTypeEnum } from "../constants";
 import { getObjectType, readUntilNullByte } from "../helpers/utils";
 import GitHelper from "../helpers/GitHelper";
 import path from "path";
@@ -6,12 +6,12 @@ import { GitFileObject, type GitObjectOptions } from "./GitObject";
 import { GitBlob } from "./GitBlob";
 
 export class GitTree extends GitFileObject {
-  type: GitObjectType = GitObjectType.Tree;
-  mode: FileMode = FileMode.Directory;
+  type: GitObjectTypeEnum = GitObjectTypeEnum.Tree;
+  mode: FileModeEnum = FileModeEnum.Directory;
   entries: GitFileObject[] = [];
 
   constructor(options: GitObjectOptions = {}) {
-    super(options, GitObjectType.Tree);
+    super(options, GitObjectTypeEnum.Tree);
     if (options.sha) {
       const buffer = GitHelper.loadObjectBuffer(options.sha);
       this.parseBuffer(buffer);
@@ -30,7 +30,7 @@ export class GitTree extends GitFileObject {
         // Verify buffer is a tree object
         const line = readUntilNullByte(buffer, offset);
         const [type, size] = line.contents.split(" ");
-        if (type != GitObjectType.Tree) {
+        if (type != GitObjectTypeEnum.Tree) {
           throw new Error(`Invalid tree object: ${buffer.toString()}`);
         }
         isTree = true;
@@ -49,7 +49,7 @@ export class GitTree extends GitFileObject {
       offset += 20;
 
       const type = getObjectType(GitHelper.loadObjectBuffer(sha));
-      if (type == GitObjectType.Tree) {
+      if (type == GitObjectTypeEnum.Tree) {
         const subTree = new GitTree({ sha });
         subTree.filename = name;
         this.entries.push(subTree);

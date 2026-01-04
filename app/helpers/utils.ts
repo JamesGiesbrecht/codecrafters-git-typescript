@@ -1,7 +1,7 @@
 import fs from "fs";
 import crypto from "crypto";
 import path from "path";
-import { FileMode, GitObjectType } from "../constants";
+import { FileModeEnum, GitObjectTypeEnum } from "../constants";
 
 const ascii = {
   null: 0,
@@ -37,44 +37,46 @@ export const readUntilNullByte = (
   offset: number = 0
 ): ParsedBuffer => readBufferUntilChar(buffer, offset, ascii.null);
 
-export const getFileModeFromPath = (path: string): FileMode => {
+export const getFileModeFromPath = (path: string): FileModeEnum => {
   try {
     fs.accessSync(path, fs.constants.X_OK);
-    return FileMode.Executable;
+    return FileModeEnum.Executable;
   } catch {
-    return FileMode.File;
+    return FileModeEnum.File;
   }
 };
 
-const getDirentFileMode = (dirent: fs.Dirent): FileMode => {
+const getDirentFileMode = (dirent: fs.Dirent): FileModeEnum => {
   if (dirent.isDirectory()) {
-    return FileMode.Directory;
+    return FileModeEnum.Directory;
   }
   if (dirent.isFile()) {
     return getFileModeFromPath(path.join(dirent.parentPath, dirent.name));
   }
   if (dirent.isSymbolicLink()) {
-    return FileMode.SymbolicLink;
+    return FileModeEnum.SymbolicLink;
   }
   throw new Error(`Invalid file mode: ${dirent.name}`);
 };
 
-export const getFileMode = (mode: number | string | fs.Dirent): FileMode => {
+export const getFileMode = (
+  mode: number | string | fs.Dirent
+): FileModeEnum => {
   if (typeof mode === "number" || typeof mode === "string") {
     switch (mode) {
       case 100644:
       case "100644":
-        return FileMode.File;
+        return FileModeEnum.File;
       case 100755:
       case "100755":
-        return FileMode.Executable;
+        return FileModeEnum.Executable;
       case 120000:
       case "120000":
-        return FileMode.SymbolicLink;
+        return FileModeEnum.SymbolicLink;
       case 40000:
       case "40000":
       case "040000":
-        return FileMode.Directory;
+        return FileModeEnum.Directory;
       default:
         throw new Error(`Invalid file mode: ${mode}`);
     }
@@ -82,7 +84,7 @@ export const getFileMode = (mode: number | string | fs.Dirent): FileMode => {
   return getDirentFileMode(mode);
 };
 
-export const getObjectType = (buffer: Buffer | string): GitObjectType => {
+export const getObjectType = (buffer: Buffer | string): GitObjectTypeEnum => {
   let type = "";
   if (typeof buffer === "string") {
     type = buffer;
@@ -91,11 +93,11 @@ export const getObjectType = (buffer: Buffer | string): GitObjectType => {
   }
   switch (type) {
     case "blob":
-      return GitObjectType.Blob;
+      return GitObjectTypeEnum.Blob;
     case "tree":
-      return GitObjectType.Tree;
+      return GitObjectTypeEnum.Tree;
     case "commit":
-      return GitObjectType.Commit;
+      return GitObjectTypeEnum.Commit;
     case "tag":
     default:
       throw new Error(`Invalid object type: ${type}`);

@@ -1,4 +1,8 @@
-import type { FileMode, GitObjectType } from "./constants";
+import type {
+  FileModeEnum,
+  GitObjectTypeEnum,
+  PackFileObjectTypeEnum,
+} from "./constants";
 
 export type ParsedArgs = {
   positional: string[];
@@ -9,3 +13,14 @@ export type GitIdentity = {
   name: string;
   email: string;
 };
+
+export interface PackFileObjectHeader {
+  size: number;
+  type: PackFileObjectTypeEnum;
+  reference?: string;
+}
+
+export interface PackFileObject {
+  header: PackFileObjectHeader;
+  data: Buffer;
+}

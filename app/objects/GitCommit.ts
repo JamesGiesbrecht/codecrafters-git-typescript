@@ -1,11 +1,11 @@
-import { DEFAULT_IDENTITY, GitObjectType } from "../constants";
+import { DEFAULT_IDENTITY, GitObjectTypeEnum } from "../constants";
 import { getTimezoneOffsetString } from "../helpers/utils";
 import GitHelper from "../helpers/GitHelper";
 import type { GitIdentity } from "../types";
 import { GitObject } from "./GitObject";
 
 export class GitCommit extends GitObject {
-  type: GitObjectType = GitObjectType.Commit;
+  type: GitObjectTypeEnum = GitObjectTypeEnum.Commit;
   treeSha: string;
   parentSha: string;
   author: GitIdentity = DEFAULT_IDENTITY;

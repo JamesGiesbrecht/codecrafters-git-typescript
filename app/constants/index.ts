@@ -1,18 +1,29 @@
 import path from "path";
 import type { GitIdentity, ParsedArgs } from "../types";
 
-export enum GitObjectType {
+export enum GitObjectTypeEnum {
   Commit = "commit",
   Tree = "tree",
   Blob = "blob",
 }
 
-export enum FileMode {
+export enum FileModeEnum {
   File = "100644",
   Executable = "100755",
   SymbolicLink = "120000",
   Directory = "040000",
   Unknown = 0,
+}
+
+export enum PackFileObjectTypeEnum {
+  RESERVED_0,
+  COMMIT,
+  TREE,
+  BLOB,
+  TAG,
+  RESERVED_5,
+  OFS_DELTA,
+  REF_DELTA,
 }
 
 const { NODE_ENV } = process.env;
