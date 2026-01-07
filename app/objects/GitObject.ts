@@ -15,7 +15,7 @@ export abstract class GitObject {
   abstract type: GitObjectTypeEnum;
   baseDir: string;
   size: number = 0;
-  content: string = "";
+  content: Buffer = Buffer.from("");
   filename: string = "";
 
   constructor(
@@ -27,7 +27,7 @@ export abstract class GitObject {
     if (options.filepath && type === GitObjectTypeEnum.Blob) {
       const fileContents = fs.readFileSync(options.filepath).toString();
       this.size = fileContents.length;
-      this.content = fileContents;
+      this.content = Buffer.from(fileContents);
       this.filename = path.basename(options.filepath);
     }
   }
@@ -64,7 +64,7 @@ export abstract class GitObject {
   abstract toBuffer(): Buffer;
 
   toString(): string {
-    return this.toBuffer().toString();
+    return this.content.toString();
   }
 }
 

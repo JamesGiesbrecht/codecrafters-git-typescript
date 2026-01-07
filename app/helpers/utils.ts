@@ -77,6 +77,9 @@ export const getFileMode = (
       case "40000":
       case "040000":
         return FileModeEnum.Directory;
+      case 160000:
+      case "160000":
+        return FileModeEnum.Submodule;
       default:
         throw new Error(`Invalid file mode: ${mode}`);
     }

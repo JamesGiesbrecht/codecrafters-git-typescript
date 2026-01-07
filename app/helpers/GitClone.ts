@@ -44,6 +44,7 @@ export const clone = async (url: string, dest: string): Promise<void> => {
   );
   const packFile = await fetchPackFile(url, wantLines);
   packFile.objects.forEach((packFileObj) => {
+    console.log(`Pack file object: ${packFileObj.header.type}`);
     const { header, data } = packFileObj;
     switch (header.type) {
       case PackFileObjectTypeEnum.COMMIT:

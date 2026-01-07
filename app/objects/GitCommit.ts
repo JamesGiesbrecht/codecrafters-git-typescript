@@ -38,10 +38,6 @@ export class GitCommit extends GitObject {
     this.size = this.commitBodyBuffer.length;
 
     if (packFile && packFile.header.size !== this.size) {
-      console.log({
-        pf: packFile.data.toString(),
-        cb: this.commitBodyBuffer.toString(),
-      });
       throw new Error(
         `Pack file size <${
           packFile.header.size

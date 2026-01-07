@@ -5,8 +5,9 @@ import { GIT_DIRS, GIT_FILES } from "../constants";
 import type { GitObject } from "../objects";
 
 export default class GitHelper {
-  public static loadObjectBuffer(sha: string): Buffer {
+  public static loadObjectBuffer(sha: string, baseDir = "."): Buffer {
     const file = path.join(
+      baseDir,
       GIT_DIRS.OBJECTS,
       sha.substring(0, 2),
       sha.substring(2)

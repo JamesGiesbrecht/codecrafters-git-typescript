@@ -12,6 +12,7 @@ export enum FileModeEnum {
   Executable = "100755",
   SymbolicLink = "120000",
   Directory = "040000",
+  Submodule = "160000",
   Unknown = 0,
 }
 

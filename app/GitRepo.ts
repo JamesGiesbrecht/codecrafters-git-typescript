@@ -13,7 +13,7 @@ export default class GitRepo {
 
   public static catFile(sha: string): string {
     const blob = new GitBlob({ sha });
-    return blob.content;
+    return blob.toString();
   }
 
   public static hashObject(filepath: string): string {
