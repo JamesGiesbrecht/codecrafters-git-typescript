@@ -12,6 +12,8 @@ export type ParsedArgs = {
 export type GitIdentity = {
   name: string;
   email: string;
+  date: Date;
+  tz: string;
 };
 
 export interface PackFileObjectHeader {

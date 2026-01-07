@@ -2,6 +2,8 @@ import zlib from "node:zlib";
 import { CONSTANTS, PackFileObjectTypeEnum } from "../constants";
 import type { PackFileObject, PackFileObjectHeader } from "../types";
 import { hexToDecimal, withSizeHeader, stripNewlines } from "./utils";
+import GitHelper from "./GitHelper";
+import { GitBlob, GitCommit, GitTree } from "../objects";
 
 const { FLUSH_PKT, HEAD, NULL_BYTE } = CONSTANTS;
 
@@ -20,6 +22,7 @@ const { FLUSH_PKT, HEAD, NULL_BYTE } = CONSTANTS;
 
 interface ReferenceFile {
   headSha: string; // Points to the HEAD pack file
+  HEAD: string;
   refs: { sha: string; name: string }[];
   capabilities?: string[];
 }
@@ -35,12 +38,38 @@ const services = {
 
 export const clone = async (url: string, dest: string): Promise<void> => {
   const refFile = await fetchRefs(url);
+  GitHelper.initGitDirs(refFile.HEAD, dest);
   const wantLines: WantLine[] = refFile.refs.map(
     (ref) => new WantLine(ref.sha)
   );
   const packFile = await fetchPackFile(url, wantLines);
-  packFile.objects;
-  // console.log({ refFile, refs: refFile.refs });
+  packFile.objects.forEach((packFileObj) => {
+    const { header, data } = packFileObj;
+    switch (header.type) {
+      case PackFileObjectTypeEnum.COMMIT:
+        const commit = new GitCommit({ packFile: packFileObj }, dest);
+        commit.write();
+        break;
+      case PackFileObjectTypeEnum.TREE:
+        const tree = new GitTree({ packFile: packFileObj }, dest);
+        tree.write();
+        break;
+      case PackFileObjectTypeEnum.BLOB:
+        const blob = new GitBlob({ packFile: packFileObj }, dest);
+        blob.write();
+        break;
+      case PackFileObjectTypeEnum.TAG:
+        console.warn("Tag not implemented");
+        break;
+      case PackFileObjectTypeEnum.OFS_DELTA:
+        console.warn("OFS Delta not implemented");
+        break;
+      case PackFileObjectTypeEnum.REF_DELTA:
+        // build ref delta
+        break;
+    }
+  });
+
   throw new Error("Clone not implemented");
 };
 
@@ -64,6 +93,7 @@ const fetchRefs = async (url: string): Promise<ReferenceFile> => {
   }
   const refFile: ReferenceFile = {
     headSha: "",
+    HEAD: "",
     refs: [],
   };
 
@@ -76,6 +106,10 @@ const fetchRefs = async (url: string): Promise<ReferenceFile> => {
       const [head, capabilities] = line.split(NULL_BYTE);
       refFile.headSha = head.split(" ")[0];
       refFile.capabilities = capabilities.split(" ");
+      refFile.HEAD =
+        refFile.capabilities
+          .find((cap) => cap.startsWith("symref=HEAD:"))
+          ?.split(":")[1] || "";
     } else {
       // Standard ref line
       const [sha, ref] = line.split(" ");
@@ -179,7 +213,6 @@ class PackFile {
     this.VERSION = this.raw.readUInt32BE(4);
     // Skip another 4 for to get the count
     this.objectCount = this.raw.readUInt32BE(8);
-    console.log({ version: this.VERSION, objectCount: this.objectCount });
   }
 
   private readPackObjectHeader(offset: number) {
@@ -194,12 +227,12 @@ class PackFile {
 
     let shift = 4; // Counts the bits to get the size
     let bytesRead = 1;
-    let hasMore = (first & 0x80) === 1; // Check if MSB is a 1, 1000 0000
+    let hasMore = (first & 0x80) !== 0; // Check if MSB is a 1, 1000 0000
 
     while (hasMore) {
       const nextByte = this.raw[offset + bytesRead];
       size |= (nextByte & 0x7f) << shift; // Mask MSB and shift to beginning of size
-      hasMore = (nextByte & 0x80) === 1;
+      hasMore = (nextByte & 0x80) !== 0;
       shift += 7; // 7 more bits were added to size
       bytesRead++;
     }
@@ -224,9 +257,7 @@ class PackFile {
 
       const { buffer: decompressedData, engine } = zlib.inflateSync(
         this.raw.subarray(offset),
-        {
-          info: true,
-        }
+        { info: true }
       ) as Buffer & { engine: zlib.Inflate };
       offset += engine.bytesWritten;
 

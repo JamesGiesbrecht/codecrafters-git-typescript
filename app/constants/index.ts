@@ -56,11 +56,15 @@ export const COMMANDS = {
 export const DEFAULT_IDENTITY: GitIdentity = {
   name: "Linus Torvalds",
   email: "ltorvalds@localhost",
+  date: new Date(),
+  tz: "-0600",
 };
 
 export const DEFAULT_PARSED_ARGS: ParsedArgs = {
   positional: [],
 };
+
+export const DEFAULT_REF = "refs/heads/main";
 
 export const CONSTANTS = {
   FLUSH_PKT: "0000",

@@ -10,14 +10,18 @@ export class GitTree extends GitFileObject {
   mode: FileModeEnum = FileModeEnum.Directory;
   entries: GitFileObject[] = [];
 
-  constructor(options: GitObjectOptions = {}) {
-    super(options, GitObjectTypeEnum.Tree);
-    if (options.sha) {
-      const buffer = GitHelper.loadObjectBuffer(options.sha);
+  constructor(options: GitObjectOptions = {}, baseDir?: string) {
+    super(options, baseDir, GitObjectTypeEnum.Tree);
+    const { sha, filepath, packFile } = options;
+    if (sha) {
+      const buffer = GitHelper.loadObjectBuffer(sha);
       this.parseBuffer(buffer);
     }
-    if (options.filepath) {
-      this.generateTree(options.filepath);
+    if (filepath) {
+      this.generateTree(filepath);
+    }
+    if (packFile) {
+      // console.log(packFile.data.toString());
     }
   }
 
@@ -106,7 +110,7 @@ export class GitTree extends GitFileObject {
 
   write(): void {
     this.entries.forEach((entry) => entry.write());
-    GitHelper.writeGitObject(this);
+    super.write();
   }
 
   toBuffer(): Buffer {

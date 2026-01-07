@@ -1,5 +1,4 @@
-import * as fs from "fs";
-import { DEFAULT_PARSED_ARGS, GIT_DIRS, GIT_FILES } from "./constants";
+import { DEFAULT_PARSED_ARGS, DEFAULT_REF } from "./constants";
 import type { ParsedArgs } from "./types";
 import { GitBlob, GitCommit, GitTree } from "./objects";
 import GitHelper from "./helpers/GitHelper";
@@ -8,10 +7,7 @@ import { clone } from "./helpers/GitClone";
 
 export default class GitRepo {
   public static async init() {
-    fs.mkdirSync(GIT_DIRS.GIT, { recursive: true });
-    fs.mkdirSync(GIT_DIRS.OBJECTS, { recursive: true });
-    fs.mkdirSync(GIT_DIRS.REFS, { recursive: true });
-    fs.writeFileSync(GIT_FILES.HEAD, "ref: refs/heads/main\n");
+    GitHelper.initGitDirs(DEFAULT_REF);
     console.log("Initialized git directory");
   }
 
@@ -46,7 +42,7 @@ export default class GitRepo {
     parentSha: string,
     message: string
   ): string {
-    const commit = new GitCommit(treeSha, parentSha, message);
+    const commit = new GitCommit({ treeSha, parentSha, message });
     commit.write();
     return commit.shaHash;
   }

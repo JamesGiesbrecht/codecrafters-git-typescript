@@ -10,11 +10,11 @@ export class GitBlob extends GitFileObject {
     return getFileModeFromPath(this.gitDir);
   }
 
-  constructor(options: GitObjectOptions = {}) {
-    super(options);
-
-    if (options.sha) {
-      const buffer = GitHelper.loadObjectBuffer(options.sha);
+  constructor(options: GitObjectOptions = {}, baseDir?: string) {
+    super(options, baseDir);
+    const { sha, packFile } = options;
+    if (sha) {
+      const buffer = GitHelper.loadObjectBuffer(sha);
       const line = readUntilNullByte(buffer);
       const [type, size] = line.contents.split(" ");
       if (type != GitObjectTypeEnum.Blob) {
@@ -23,10 +23,10 @@ export class GitBlob extends GitFileObject {
       this.size = Number(size);
       this.content = buffer.subarray(line.offset).toString();
     }
-  }
 
-  write(): void {
-    GitHelper.writeGitObject(this);
+    if (packFile) {
+      // console.log(packFile.data.toString());
+    }
   }
 
   toBuffer(): Buffer {
