@@ -3,7 +3,7 @@ import {
   GitObjectTypeEnum,
   PackFileObjectTypeEnum,
 } from "../constants";
-import { getTimezoneOffsetString } from "../helpers/utils";
+import GitHelper from "../helpers/GitHelper";
 import type { GitIdentity, PackFileObject } from "../types";
 import { GitObject, type GitObjectOptions } from "./GitObject";
 
@@ -21,19 +21,29 @@ export class GitCommit extends GitObject {
   committer: GitIdentity = DEFAULT_IDENTITY;
   message: string = "";
 
-  constructor(options: GitCommitParams, baseDir?: string) {
+  constructor(options: GitCommitParams, baseDir: string) {
     super({}, baseDir);
-    const { treeSha, parentSha, message, packFile } = options;
+    const { sha, treeSha, parentSha, message, packFile } = options;
     if (treeSha && parentSha && message) {
       this.treeSha = treeSha;
       this.parentSha = parentSha;
       this.message = message;
     }
+    let commitBodyStr = "";
+    let buffer = options.buffer;
     if (packFile) {
       if (packFile.header.type !== PackFileObjectTypeEnum.COMMIT) {
         throw new Error("Pack file is not a commit");
       }
-      this.parsePackFile(packFile);
+      commitBodyStr = packFile.data.toString();
+    } else if (sha && !buffer) {
+      buffer = GitHelper.loadObjectBuffer(sha, baseDir);
+    }
+    if (buffer) {
+      commitBodyStr = buffer.toString();
+    }
+    if (commitBodyStr) {
+      this.parseCommitBodyString(commitBodyStr);
     }
     this.size = this.commitBodyBuffer.length;
 
@@ -54,12 +64,8 @@ export class GitCommit extends GitObject {
   //   )} ${getTimezoneOffsetString(this.timestamp)}`;
   // }
 
-  private parsePackFile(packFile: PackFileObject): void {
-    const lines = packFile.data
-      .toString()
-      .split("\n")
-      .filter((l) => l);
-    const [treeStr, parentStr, authorStr, committerStr, message] = lines;
+  private parseCommitBodyString(str: string): void {
+    const lines = str.split("\n").filter((l) => l);
     this.treeSha = this.findMatchingLine("tree", lines);
     this.parentSha = this.findMatchingLine("parent", lines);
     this.author = this.parseIdString(
@@ -93,7 +99,6 @@ export class GitCommit extends GitObject {
 
   toBuffer(): Buffer {
     const header = Buffer.from(`${this.type} ${this.size}\0`);
-
     return Buffer.concat([header, this.commitBodyBuffer]);
   }
 

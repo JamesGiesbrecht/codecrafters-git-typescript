@@ -17,7 +17,7 @@ export enum FileModeEnum {
 }
 
 export enum PackFileObjectTypeEnum {
-  RESERVED_0,
+  INVALID_0,
   COMMIT,
   TREE,
   BLOB,
@@ -71,4 +71,23 @@ export const CONSTANTS = {
   FLUSH_PKT: "0000",
   HEAD: "HEAD",
   NULL_BYTE: "\0",
+};
+
+export const BIT_MASKS = {
+  /**
+   * 0000 1111
+   */
+  LOW_4: 0x0f,
+  /**
+   * 0000 0111
+   */
+  LOW_3: 0x07,
+  /**
+   * 1000 0000
+   */
+  HIGH_1: 0x80,
+  /**
+   * 0111 1111
+   */
+  LOW_7: 0x7f,
 };

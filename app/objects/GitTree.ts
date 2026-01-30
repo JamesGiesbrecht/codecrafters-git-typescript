@@ -5,27 +5,29 @@ import {
 } from "../constants";
 import {
   getFileMode,
-  getObjectType,
   readUntilNullByte,
+  generateSha1Hash,
 } from "../helpers/utils";
 import GitHelper from "../helpers/GitHelper";
 import path from "path";
 import { GitFileObject, type GitObjectOptions } from "./GitObject";
 import { GitBlob } from "./GitBlob";
-import type { PackFileObject, PackFileObjectHeader } from "../types";
+import type { PackFileObject } from "../types";
 import { GitSubmodule } from "./GitSubmodule";
 
 export class GitTree extends GitFileObject {
-  hash?: string;
   type: GitObjectTypeEnum = GitObjectTypeEnum.Tree;
   mode: FileModeEnum = FileModeEnum.Directory;
   entries: GitFileObject[] = [];
 
-  constructor(options: GitObjectOptions = {}, baseDir?: string) {
-    super(options, baseDir, GitObjectTypeEnum.Tree);
+  constructor(options: GitObjectOptions = {}, baseDir: string) {
+    super(options, baseDir);
     const { sha, filepath, packFile } = options;
-    if (sha) {
-      const buffer = GitHelper.loadObjectBuffer(sha, this.baseDir);
+    let buffer = options.buffer;
+    if (sha && !buffer) {
+      buffer = GitHelper.loadObjectBuffer(sha, this.baseDir);
+    }
+    if (buffer) {
       this.parseBuffer(buffer);
     }
     if (filepath) {
@@ -41,11 +43,13 @@ export class GitTree extends GitFileObject {
           `Pack file size <${packFile.header.size}> does not match calculated commit size <${this.size}>`
         );
       }
+      // Compute and preserve the hash from the original packFile data
+      const originalBuffer = Buffer.concat([
+        Buffer.from(`${this.type} ${packFile.header.size}\0`),
+        packFile.data,
+      ]);
+      this.hash = generateSha1Hash(originalBuffer);
     }
-  }
-
-  get shaHash(): string {
-    return this.hash || super.shaHash;
   }
 
   private parsePackFile(packFile: PackFileObject) {
@@ -55,22 +59,21 @@ export class GitTree extends GitFileObject {
 
   private parseBuffer(buffer: Buffer, skipHeader?: Boolean) {
     let offset = 0;
-    let isTree: Boolean | undefined = undefined;
 
-    while (offset < buffer.length) {
-      if (isTree === undefined && !skipHeader) {
-        // Verify buffer is a tree object
-        const line = readUntilNullByte(buffer, offset);
-        const [type, size] = line.contents.split(" ");
-        if (type != GitObjectTypeEnum.Tree) {
-          throw new Error(`Invalid tree object: ${buffer.toString()}`);
-        }
-        isTree = true;
-        this.size = Number(size);
-        offset = line.offset;
-        this.content = buffer.subarray(offset);
+    // Parse header if present
+    if (!skipHeader) {
+      const line = readUntilNullByte(buffer, offset);
+      const [type, size] = line.contents.split(" ");
+      if (type != GitObjectTypeEnum.Tree) {
+        throw new Error(`Invalid tree object: ${buffer.toString()}`);
       }
+      this.size = Number(size);
+      offset = line.offset;
+      this.content = buffer.subarray(offset);
+    }
 
+    // Parse entries
+    while (offset < buffer.length) {
       // Read mode and filename
       const line = readUntilNullByte(buffer, offset);
       const [_mode, name] = line.contents.split(" ");
@@ -89,13 +92,14 @@ export class GitTree extends GitFileObject {
       if (mode === FileModeEnum.Submodule) {
         const submodule = new GitSubmodule(sha, name, this.baseDir);
         this.entries.push(submodule);
-      } else if (type == GitObjectTypeEnum.Tree) {
+      } else if (type === GitObjectTypeEnum.Tree) {
         const subTree = new GitTree({}, this.baseDir);
         subTree.hash = sha;
         subTree.filename = name;
         this.entries.push(subTree);
       } else {
         const blob = new GitBlob({}, this.baseDir);
+        blob.hash = sha;
         blob.filename = name;
         this.entries.push(blob);
       }
@@ -111,8 +115,8 @@ export class GitTree extends GitFileObject {
     for (const entry of dirContents) {
       const filepath = path.join(entry.parentPath, entry.name);
       const gitObj = entry.isDirectory()
-        ? new GitTree({ filepath })
-        : new GitBlob({ filepath });
+        ? new GitTree({ filepath }, this.baseDir)
+        : new GitBlob({ filepath }, this.baseDir);
       gitObj.filename = entry.name;
       this.entries.push(gitObj);
     }
@@ -143,7 +147,7 @@ export class GitTree extends GitFileObject {
       this.entries
         .map(
           (entry) =>
-            `${entry.mode} ${entry.type} ${entry.shaHash}    ${entry.filename}`
+            `${entry.mode} ${entry.type} ${entry.getHash}    ${entry.filename}`
         )
         .join("\n") + (this.entries.length > 0 ? "\n" : "")
     );
@@ -151,14 +155,15 @@ export class GitTree extends GitFileObject {
 
   write(): void {
     this.entries.forEach((entry) => entry.write());
+    this.size = this.calculateSize();
     super.write();
   }
 
   toBuffer(): Buffer {
     // "tree <size>\0" + entries
     const entries = this.entries.map((e) => e.toTreeBuffer());
-    const contentBuffer = Buffer.concat(entries);
     const header = `${this.type} ${this.size}\0`;
-    return Buffer.concat([Buffer.from(header), contentBuffer]);
+    const buf = Buffer.concat([Buffer.from(header), ...entries]);
+    return buf;
   }
 }

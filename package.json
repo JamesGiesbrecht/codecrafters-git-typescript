@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "bun run app/main.ts",
     "test:build": "cd git-tester && make build",
-    "challenge": "open -a 'Google Chrome' https://app.codecrafters.io/courses/git/overview"
+    "challenge": "open -a 'Google Chrome' https://app.codecrafters.io/courses/git/overview",
+    "test:clone": "rm -rf test-clone && ./your_program.sh clone https://git.goose.fans/JamesGiesbrecht/unraid-dotfiles.git test-clone"
   },
   "type": "module"
 }

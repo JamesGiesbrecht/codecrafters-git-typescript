@@ -1,19 +1,40 @@
 import fs from "fs";
 import path from "path";
 import zlib from "node:zlib";
-import { GIT_DIRS, GIT_FILES } from "../constants";
-import type { GitObject } from "../objects";
+import { GIT_DIRS, GIT_FILES, GitObjectTypeEnum } from "../constants";
+import { GitBlob, GitCommit, GitTree, type GitObject } from "../objects";
+import { getObjectType } from "./utils";
 
 export default class GitHelper {
-  public static loadObjectBuffer(sha: string, baseDir = "."): Buffer {
+  public static loadObjectBuffer(sha: string, baseDir: string): Buffer {
     const file = path.join(
       baseDir,
       GIT_DIRS.OBJECTS,
       sha.substring(0, 2),
       sha.substring(2)
     );
+    if (!fs.existsSync(file)) {
+      throw new Error(`File not found at ${file}: ${sha}`);
+    }
     const fileContents = fs.readFileSync(file);
     return this.decompressBuffer(fileContents);
+  }
+
+  public static loadFromBuffer(buffer: Buffer, baseDir: string): GitObject {
+    const objectType = getObjectType(buffer);
+    switch (objectType) {
+      case GitObjectTypeEnum.Blob:
+        return new GitBlob({ buffer }, baseDir);
+      case GitObjectTypeEnum.Tree:
+        return new GitTree({ buffer }, baseDir);
+      case GitObjectTypeEnum.Commit:
+        return new GitCommit({ buffer }, baseDir);
+    }
+  }
+
+  public static loadFromSha(shaHash: string, baseDir: string): GitObject {
+    const buffer = this.loadObjectBuffer(shaHash, baseDir);
+    return this.loadFromBuffer(buffer, baseDir);
   }
 
   public static getDirectoryContents(dir: string): fs.Dirent<string>[] {
@@ -24,7 +45,7 @@ export default class GitHelper {
     return contents;
   }
 
-  public static initGitDirs(HEAD: string, baseDir = ".") {
+  public static initGitDirs(HEAD: string, baseDir: string) {
     fs.mkdirSync(path.resolve(baseDir, GIT_DIRS.GIT), { recursive: true });
     fs.mkdirSync(path.resolve(baseDir, GIT_DIRS.OBJECTS), { recursive: true });
     fs.mkdirSync(path.resolve(baseDir, GIT_DIRS.REFS), { recursive: true });

@@ -7,34 +7,34 @@ import { clone } from "./helpers/GitClone";
 
 export default class GitRepo {
   public static async init() {
-    GitHelper.initGitDirs(DEFAULT_REF);
+    GitHelper.initGitDirs(DEFAULT_REF, ".");
     console.log("Initialized git directory");
   }
 
   public static catFile(sha: string): string {
-    const blob = new GitBlob({ sha });
+    const blob = new GitBlob({ sha }, ".");
     return blob.toString();
   }
 
   public static hashObject(filepath: string): string {
-    const blob = new GitBlob({ filepath });
+    const blob = new GitBlob({ filepath }, ".");
     blob.write();
-    return blob.shaHash;
+    return blob.getHash;
   }
 
   public static lsTree(
     sha: string,
     flags: ParsedArgs = DEFAULT_PARSED_ARGS
   ): string {
-    const tree = new GitTree({ sha });
+    const tree = new GitTree({ sha }, ".");
     const nameOnly = flags["name-only"] === true;
     return tree.ls(nameOnly);
   }
 
   public static writeTree(dirPath: string = "."): string {
-    const tree = new GitTree({ filepath: dirPath });
+    const tree = new GitTree({ filepath: dirPath }, ".");
     tree.write();
-    return tree.shaHash;
+    return tree.getHash;
   }
 
   public static commitTree(
@@ -42,9 +42,9 @@ export default class GitRepo {
     parentSha: string,
     message: string
   ): string {
-    const commit = new GitCommit({ treeSha, parentSha, message });
+    const commit = new GitCommit({ treeSha, parentSha, message }, ".");
     commit.write();
-    return commit.shaHash;
+    return commit.getHash;
   }
 
   public static async clone(url: string, dest: string): Promise<void> {

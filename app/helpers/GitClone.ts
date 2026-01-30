@@ -1,9 +1,15 @@
 import zlib from "node:zlib";
-import { CONSTANTS, PackFileObjectTypeEnum } from "../constants";
+import { BIT_MASKS, CONSTANTS, PackFileObjectTypeEnum } from "../constants";
 import type { PackFileObject, PackFileObjectHeader } from "../types";
-import { hexToDecimal, withSizeHeader, stripNewlines } from "./utils";
+import {
+  hexToDecimal,
+  withSizeHeader,
+  stripNewlines,
+  getMSB,
+  decodeSizeWithMSB,
+} from "./utils";
 import GitHelper from "./GitHelper";
-import { GitBlob, GitCommit, GitTree } from "../objects";
+import { GitBlob, GitCommit, GitObject, GitTree } from "../objects";
 
 const { FLUSH_PKT, HEAD, NULL_BYTE } = CONSTANTS;
 
@@ -44,8 +50,7 @@ export const clone = async (url: string, dest: string): Promise<void> => {
   );
   const packFile = await fetchPackFile(url, wantLines);
   packFile.objects.forEach((packFileObj) => {
-    console.log(`Pack file object: ${packFileObj.header.type}`);
-    const { header, data } = packFileObj;
+    const { header } = packFileObj;
     switch (header.type) {
       case PackFileObjectTypeEnum.COMMIT:
         const commit = new GitCommit({ packFile: packFileObj }, dest);
@@ -66,12 +71,14 @@ export const clone = async (url: string, dest: string): Promise<void> => {
         console.warn("OFS Delta not implemented");
         break;
       case PackFileObjectTypeEnum.REF_DELTA:
-        // build ref delta
+        const refDelta = new RefDelta(packFileObj, dest);
+        const object = refDelta.getTargetObject(dest);
+        object.write();
         break;
     }
   });
 
-  throw new Error("Clone not implemented");
+  // Clone completed
 };
 
 const fetchRefs = async (url: string): Promise<ReferenceFile> => {
@@ -223,17 +230,17 @@ class PackFile {
      * The second 3 bits are the type
      * The remaining 4 bits are the lowest bits (right side) of the objects size
      */
-    let size = first & 0x0f; // Low 4 bits, 0000 1111
-    const type: PackFileObjectTypeEnum = (first >> 4) & 0x07; // Shift type bits to end and get low 3, 0000 0111
+    let size = first & BIT_MASKS.LOW_4; // Low 4 bits, 0000 1111
+    const type: PackFileObjectTypeEnum = (first >> 4) & BIT_MASKS.LOW_3; // Shift type bits to end and get low 3, 0000 0111
 
     let shift = 4; // Counts the bits to get the size
     let bytesRead = 1;
-    let hasMore = (first & 0x80) !== 0; // Check if MSB is a 1, 1000 0000
+    let hasMore = getMSB(first) !== 0; // Check if MSB is a 1, 1000 0000
 
     while (hasMore) {
       const nextByte = this.raw[offset + bytesRead];
-      size |= (nextByte & 0x7f) << shift; // Mask MSB and shift to beginning of size
-      hasMore = (nextByte & 0x80) !== 0;
+      size |= (nextByte & BIT_MASKS.LOW_7) << shift; // Mask MSB and shift to beginning of size
+      hasMore = getMSB(nextByte) !== 0;
       shift += 7; // 7 more bits were added to size
       bytesRead++;
     }
@@ -270,5 +277,161 @@ class PackFile {
     }
 
     return objs;
+  }
+}
+
+class RefDelta {
+  private deltaBuffer: Buffer;
+  private sourceBuffer: Buffer;
+  private targetBuffer: Buffer;
+  private sourceSize: number;
+  private targetSize: number;
+
+  constructor(deltaPackfileObject: PackFileObject, baseDir: string) {
+    this.deltaBuffer = deltaPackfileObject.data;
+    this.targetBuffer = Buffer.alloc(0);
+
+    // Get size of source and target objects
+    let offset = 0;
+    const sourceResult = decodeSizeWithMSB(this.deltaBuffer, offset);
+    this.sourceSize = sourceResult.size;
+    offset = sourceResult.offset;
+    const targetResult = decodeSizeWithMSB(this.deltaBuffer, offset);
+    this.targetSize = targetResult.size;
+    offset = targetResult.offset;
+
+    // Load source object from disk
+    const sourceObject = GitHelper.loadFromSha(
+      deltaPackfileObject.header.reference!,
+      baseDir
+    );
+    this.sourceBuffer = sourceObject.buffer;
+
+    if (sourceObject.size !== this.sourceSize) {
+      throw new Error(
+        `Source object may be corrupted: expected ${this.sourceSize} bytes in size, got ${this.sourceBuffer.length}`
+      );
+    }
+    // Build target object by parsing instructions
+    this.parseInstructions(offset);
+  }
+
+  private parseInstructions(startOffset: number): void {
+    let offset = startOffset;
+    const out: Buffer[] = [];
+    let outLength = 0;
+
+    // Build target object
+    while (offset < this.deltaBuffer.length) {
+      const first = this.deltaBuffer[offset];
+      offset++;
+      if (getMSB(first) === 1) {
+        // Copy instruction
+        let copyOffset = 0;
+        let copySize = 0;
+
+        if (first & 0x01) {
+          copyOffset |= this.deltaBuffer[offset];
+          offset += 1;
+        }
+        if (first & 0x02) {
+          copyOffset |= this.deltaBuffer[offset] << 8;
+          offset += 1;
+        }
+        if (first & 0x04) {
+          copyOffset |= this.deltaBuffer[offset] << 16;
+          offset += 1;
+        }
+        if (first & 0x08) {
+          copyOffset |= this.deltaBuffer[offset] << 24;
+          offset += 1;
+        }
+        if (first & 0x10) {
+          copySize |= this.deltaBuffer[offset];
+          offset += 1;
+        }
+        if (first & 0x20) {
+          copySize |= this.deltaBuffer[offset] << 8;
+          offset += 1;
+        }
+        if (first & 0x40) {
+          copySize |= this.deltaBuffer[offset] << 16;
+          offset += 1;
+        }
+
+        if (copySize === 0) {
+          copySize = 0x10000;
+        }
+
+        out.push(this.sourceBuffer.subarray(copyOffset, copyOffset + copySize));
+        outLength += copySize;
+
+        //   let copyOffset = 0;
+        //   let copySize = 0;
+
+        //   // Parse additional offset bytes (bits 0-3 of first indicate extras)
+        //   // These 4 bits are the low 4 of the offset amount and also tell us how many of the following bytes belong to it
+        //   let shift = 0;
+        //   for (let i = 0; i < 4; i++) {
+        //     // Check if the nth bit is set
+        //     // 1 << 0 => 0000 0001; Checking if bit 0 is set
+        //     // 1 << 1 => 0000 0010; Checking if bit 1 is set
+        //     // etc.
+        //     if (first & (1 << i)) {
+        //       copyOffset |= this.deltaBuffer[offset] << shift;
+        //       offset++;
+        //       shift += 8;
+        //     }
+        //   }
+
+        //   // Parse additional size bytes (bits 4-6 of first indicate extras)
+        //   shift = 0;
+        //   // Start loop at 4 to correspond with the position of the size data in `first`
+        //   for (let i = 4; i < 7; i++) {
+        //     if (first & (1 << i)) {
+        //       copySize |= this.deltaBuffer[offset] << shift;
+        //       offset++;
+        //       shift += 8;
+        //     }
+        //   }
+        //   if (copySize === 0) {
+        //     copySize = 0x10000;
+        //   }
+
+        //   // Copy from source and append to target
+        //   const data = this.sourceBuffer.subarray(
+        //     copyOffset,
+        //     copyOffset + copySize
+        //   );
+        //   console.log(`copyDataBuffer\n${data.toString()}`);
+        //   this.targetBuffer = Buffer.concat([this.targetBuffer, data]);
+      } else {
+        // Add instruction
+        const insertSize = first;
+        out.push(this.deltaBuffer.subarray(offset, offset + insertSize));
+        offset += insertSize;
+        outLength += insertSize;
+
+        // const addSize = first; // MSB=0, so value is the size
+        // const data = this.deltaBuffer.subarray(offset, offset + addSize);
+        // console.log(`addDataBuffer\n${data.toString()}`);
+        // offset += addSize;
+        // this.targetBuffer = Buffer.concat([this.targetBuffer, data]);
+      }
+    }
+    this.targetBuffer = Buffer.concat(out);
+
+    if (this.targetBuffer.length !== this.targetSize) {
+      // console.log(`Source Buffer:\n${this.sourceBuffer.toString()}`);
+      // console.log(`Target Buffer:\n${this.targetBuffer.toString()}`);
+      throw new Error(
+        `Target size mismatch: expected ${this.targetSize}, got ${this.targetBuffer.length}.`
+      );
+    }
+  }
+
+  getTargetObject(baseDir: string): GitObject {
+    // console.log({ target: this.targetBuffer.toString() });
+    return GitHelper.loadFromBuffer(this.targetBuffer, baseDir);
   }
 }

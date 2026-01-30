@@ -1,7 +1,7 @@
 import fs from "fs";
 import crypto from "crypto";
 import path from "path";
-import { FileModeEnum, GitObjectTypeEnum } from "../constants";
+import { BIT_MASKS, FileModeEnum, GitObjectTypeEnum } from "../constants";
 
 const ascii = {
   null: 0,
@@ -143,4 +143,30 @@ export const stripNewlines = (str: string): string => {
 export const withSizeHeader = (str: string): string => {
   // Add 4 bytes for length header
   return decimalToHex(str.length + 4) + str;
+};
+
+export const getMSB = (num: number): 1 | 0 => {
+  return num & BIT_MASKS.HIGH_1 ? 1 : 0;
+};
+
+export const decodeSizeWithMSB = (
+  buffer: Buffer,
+  bufferOffset: number
+): { size: number; offset: number } => {
+  let offset = bufferOffset;
+  const first = buffer[offset];
+  let size = first & BIT_MASKS.LOW_7;
+  let hasMore = getMSB(first) !== 0;
+  let shift = 7;
+  offset++;
+
+  while (hasMore) {
+    const next = buffer[offset];
+    size |= (next & BIT_MASKS.LOW_7) << shift;
+    hasMore = getMSB(next) !== 0;
+    shift += 7;
+    offset++;
+  }
+
+  return { size, offset };
 };
