@@ -1,4 +1,4 @@
-[![progress-banner](https://backend.codecrafters.io/progress/git/56868436-44b7-4023-9c43-8a3b050ba0d3)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+[![progress-banner](https://backend.codecrafters.io/progress/git/a4abbf06-b236-4bd4-aee2-3b580852da82)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
 This is a starting point for TypeScript solutions to the
 ["Build Your Own Git" Challenge](https://codecrafters.io/challenges/git).
@@ -90,7 +90,7 @@ mygit init
     bun test
     ```
 
-# Documentation
+# Resources
 
 ## Git Clone
 
