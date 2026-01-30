@@ -6,6 +6,7 @@ import {
   FileModeEnum,
   GIT_DIRS,
   GitObjectTypeEnum,
+  PackFileObjectTypeEnum,
 } from "../constants";
 import { generateSha1Hash } from "../helpers/utils";
 import type { PackFileObject } from "../types";
@@ -51,6 +52,10 @@ export abstract class GitObject {
     return path.dirname(this.gitDir);
   }
 
+  get header(): Buffer {
+    return Buffer.from(`${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`);
+  }
+
   get buffer(): Buffer {
     return this.toBuffer();
   }
@@ -67,6 +72,14 @@ export abstract class GitObject {
 
   toString(): string {
     return this.content.toString();
+  }
+  protected validatePackFileType(
+    packFile: PackFileObject,
+    expected: PackFileObjectTypeEnum,
+  ): void {
+    if (packFile.header.type !== expected) {
+      throw new Error(`Pack file is not a ${expected}`);
+    }
   }
 }
 

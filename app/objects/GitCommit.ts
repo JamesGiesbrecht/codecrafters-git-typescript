@@ -33,9 +33,7 @@ export class GitCommit extends GitObject {
     let commitBodyStr = "";
     let buffer = options.buffer;
     if (packFile) {
-      if (packFile.header.type !== PackFileObjectTypeEnum.COMMIT) {
-        throw new Error("Pack file is not a commit");
-      }
+      this.validatePackFileType(packFile, PackFileObjectTypeEnum.COMMIT);
       commitBodyStr = packFile.data.toString();
     } else if (sha && !buffer) {
       buffer = GitHelper.loadObjectBuffer(sha, baseDir);
@@ -89,10 +87,7 @@ export class GitCommit extends GitObject {
   }
 
   toBuffer(): Buffer {
-    const header = Buffer.from(
-      `${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`,
-    );
-    return Buffer.concat([header, this.commitBodyBuffer]);
+    return Buffer.concat([this.header, this.commitBodyBuffer]);
   }
 
   private findMatchingLine(

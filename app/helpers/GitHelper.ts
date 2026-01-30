@@ -3,7 +3,7 @@ import path from "path";
 import zlib from "node:zlib";
 import { GIT_DIRS, GIT_FILES, GitObjectTypeEnum } from "../constants";
 import { GitBlob, GitCommit, GitTree, type GitObject } from "../objects";
-import { getObjectType } from "./utils";
+import { getObjectType, readUntilNullByte } from "./utils";
 
 export default class GitHelper {
   public static loadObjectBuffer(sha: string, baseDir: string): Buffer {
@@ -17,7 +17,7 @@ export default class GitHelper {
       throw new Error(`File not found at ${file}: ${sha}`);
     }
     const fileContents = fs.readFileSync(file);
-    return this.decompressBuffer(fileContents);
+    return zlib.inflateSync(fileContents);
   }
 
   public static loadFromBuffer(buffer: Buffer, baseDir: string): GitObject {
@@ -51,12 +51,18 @@ export default class GitHelper {
     fs.mkdirSync(path.resolve(baseDir, GIT_DIRS.REFS), { recursive: true });
     fs.writeFileSync(path.resolve(baseDir, GIT_FILES.HEAD), `ref: ${HEAD}\n`);
   }
-
-  private static compressBuffer(buff: Buffer): Buffer {
-    return zlib.deflateSync(buff);
-  }
-
-  private static decompressBuffer(buff: Buffer): Buffer {
-    return zlib.inflateSync(buff);
+  public static parseAndValidateObjectHeader(
+    buffer: Buffer,
+    expectedType: GitObjectTypeEnum,
+    offset: number = 0,
+  ): { type: string; size: number; offset: number } {
+    const line = readUntilNullByte(buffer, offset);
+    const [type, size] = line.contents.split(" ");
+    if (type !== expectedType) {
+      throw new Error(
+        `Invalid object type. Expected ${expectedType}, got ${type}`,
+      );
+    }
+    return { type, size: Number(size), offset: line.offset };
   }
 }

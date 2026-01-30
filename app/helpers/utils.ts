@@ -16,7 +16,7 @@ type ParsedBuffer = {
 const readBufferUntilChar = (
   buffer: Buffer,
   offset: number = 0,
-  asciiCode: number
+  asciiCode: number,
 ): ParsedBuffer => {
   let contents = "";
   while (offset < buffer.length && buffer[offset] !== asciiCode) {
@@ -29,12 +29,12 @@ const readBufferUntilChar = (
 
 export const readUntilSpace = (
   buffer: Buffer,
-  offset: number = 0
+  offset: number = 0,
 ): ParsedBuffer => readBufferUntilChar(buffer, offset, ascii.space);
 
 export const readUntilNullByte = (
   buffer: Buffer,
-  offset: number = 0
+  offset: number = 0,
 ): ParsedBuffer => readBufferUntilChar(buffer, offset, ascii.null);
 
 export const getFileModeFromPath = (path: string): FileModeEnum => {
@@ -60,7 +60,7 @@ const getDirentFileMode = (dirent: fs.Dirent): FileModeEnum => {
 };
 
 export const getFileMode = (
-  mode: number | string | fs.Dirent
+  mode: number | string | fs.Dirent,
 ): FileModeEnum => {
   if (typeof mode === "number" || typeof mode === "string") {
     switch (mode) {
@@ -132,10 +132,6 @@ export const decimalToHex = (num: number): string => {
   return num.toString(16).padStart(4, "0");
 };
 
-// export const decodeHex = (hexStr: string): string => {
-//   return Buffer.from(hexStr, "hex").toString();
-// };
-
 export const stripNewlines = (str: string): string => {
   return str.replaceAll("\n", "");
 };
@@ -151,7 +147,7 @@ export const getMSB = (num: number): 1 | 0 => {
 
 export const decodeSizeWithMSB = (
   buffer: Buffer,
-  bufferOffset: number
+  bufferOffset: number,
 ): { size: number; offset: number } => {
   let offset = bufferOffset;
   const first = buffer[offset];

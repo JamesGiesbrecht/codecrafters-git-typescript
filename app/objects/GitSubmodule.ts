@@ -17,7 +17,6 @@ export class GitSubmodule extends GitFileObject {
   }
 
   toBuffer(): Buffer {
-    const header = `${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`;
-    return Buffer.concat([Buffer.from(header), this.content]);
+    return Buffer.concat([this.header, this.content]);
   }
 }

@@ -291,8 +291,12 @@ class PackFile {
       offset += headerBytes;
 
       if (header.type === PackFileObjectTypeEnum.REF_DELTA) {
-        header.reference = this.raw.toString("hex", offset, offset + 20);
-        offset += 20;
+        header.reference = this.raw.toString(
+          "hex",
+          offset,
+          offset + CONSTANTS.SHA1_HASH_LENGTH,
+        );
+        offset += CONSTANTS.SHA1_HASH_LENGTH;
       }
 
       const { buffer: decompressedData, engine } = zlib.inflateSync(
@@ -352,7 +356,8 @@ class RefDelta {
 
   private parseInstructions(startOffset: number): void {
     let offset = startOffset;
-    const out: Buffer[] = [];
+    this.targetBuffer = Buffer.alloc(this.targetSize);
+    let outOffset = 0;
     let outLength = 0;
 
     // Build target object
@@ -360,58 +365,58 @@ class RefDelta {
       const instruction = this.deltaBuffer[offset];
       offset++;
       if (getMSB(instruction) === 1) {
+        // Copy Instruction
         let copyOffset = 0;
         let copySize = 0;
 
-        if (instruction & 0x01) {
-          copyOffset |= this.deltaBuffer[offset];
-          offset += 1;
-        }
-        if (instruction & 0x02) {
-          copyOffset |= this.deltaBuffer[offset] << 8;
-          offset += 1;
-        }
-        if (instruction & 0x04) {
-          copyOffset |= this.deltaBuffer[offset] << 16;
-          offset += 1;
-        }
-        if (instruction & 0x08) {
-          copyOffset |= this.deltaBuffer[offset] << 24;
-          offset += 1;
-        }
-        if (instruction & 0x10) {
-          copySize |= this.deltaBuffer[offset];
-          offset += 1;
-        }
-        if (instruction & 0x20) {
-          copySize |= this.deltaBuffer[offset] << 8;
-          offset += 1;
-        }
-        if (instruction & 0x40) {
-          copySize |= this.deltaBuffer[offset] << 16;
-          offset += 1;
+        // Parse additional offset bytes (bits 0-3 of first indicate extras)
+        // These 4 bits are the low 4 of the offset amount and also tell us how many of the following bytes belong to it
+        let shift = 0;
+        for (let i = 0; i < 4; i++) {
+          // Check if the nth bit is set
+          // 1 << 0 => 0000 0001; Checking if bit 0 is set
+          // 1 << 1 => 0000 0010; Checking if bit 1 is set
+          // etc.
+          if (instruction & (1 << i)) {
+            copyOffset |= this.deltaBuffer[offset] << shift;
+            offset++;
+            shift += 8;
+          }
         }
 
-        if (copySize === 0) {
-          copySize = 0x10000;
+        // Parse additional size bytes (bits 4-6 of first indicate extras)
+        shift = 0;
+        // Start loop at 4 to correspond with the position of the size data in `first`
+        for (let i = 4; i < 7; i++) {
+          if (instruction & (1 << i)) {
+            copySize |= this.deltaBuffer[offset] << shift;
+            offset++;
+            shift += 8;
+          }
         }
+        if (copySize === 0) copySize = 0x10000;
 
         const data = this.sourceBuffer.subarray(
           copyOffset,
           copyOffset + copySize,
         );
-        out.push(data);
+        data.copy(this.targetBuffer, outOffset);
+        outOffset += copySize;
         outLength += copySize;
       } else {
         // Add instruction
         const insertSize = instruction & BIT_MASKS.LOW_7;
-        const data = this.deltaBuffer.subarray(offset, offset + insertSize);
-        out.push(data);
+        this.deltaBuffer.copy(
+          this.targetBuffer,
+          outOffset,
+          offset,
+          offset + insertSize,
+        );
+        outOffset += insertSize;
         offset += insertSize;
         outLength += insertSize;
       }
     }
-    this.targetBuffer = Buffer.concat(out);
     if (
       this.targetBuffer.length !== this.targetSize ||
       outLength !== this.targetSize

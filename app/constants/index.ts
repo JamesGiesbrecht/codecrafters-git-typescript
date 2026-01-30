@@ -71,6 +71,7 @@ export const CONSTANTS = {
   FLUSH_PKT: "0000",
   HEAD: "HEAD",
   NULL_BYTE: "\0",
+  SHA1_HASH_LENGTH: 20,
 };
 
 export const BIT_MASKS = {

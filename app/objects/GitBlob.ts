@@ -32,29 +32,28 @@ export class GitBlob extends GitFileObject {
       this.filename = path.basename(filepath);
     }
     if (packFile) {
-      if (packFile.header.type !== PackFileObjectTypeEnum.BLOB) {
-        throw new Error("Pack file is not a blob");
-      }
+      this.validatePackFileType(packFile, PackFileObjectTypeEnum.BLOB);
       this.size = packFile.header.size;
       this.content = packFile.data;
     }
   }
 
   private parseBuffer(buffer: Buffer) {
-    const line = readUntilNullByte(buffer);
-    const [type, size] = line.contents.split(" ");
+    const { type, size, offset } = GitHelper.parseAndValidateObjectHeader(
+      buffer,
+      GitObjectTypeEnum.Blob,
+    );
     if (type != GitObjectTypeEnum.Blob) {
       throw new Error(`Invalid type ${type}`);
     }
     this.size = Number(size);
     // Extract EXACTLY the number of bytes specified in the header, not all remaining bytes
-    const contentStart = line.offset;
+    const contentStart = offset;
     const contentEnd = contentStart + this.size;
     this.content = buffer.subarray(contentStart, contentEnd);
   }
 
   toBuffer(): Buffer {
-    const header = `${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`;
-    return Buffer.concat([Buffer.from(header), this.content]);
+    return Buffer.concat([this.header, this.content]);
   }
 }
