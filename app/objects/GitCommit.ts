@@ -1,10 +1,11 @@
 import {
+  CONSTANTS,
   DEFAULT_IDENTITY,
   GitObjectTypeEnum,
   PackFileObjectTypeEnum,
 } from "../constants";
 import GitHelper from "../helpers/GitHelper";
-import type { GitIdentity, PackFileObject } from "../types";
+import type { GitIdentity } from "../types";
 import { GitObject, type GitObjectOptions } from "./GitObject";
 
 type GitCommitParams = GitObjectOptions & {
@@ -46,33 +47,23 @@ export class GitCommit extends GitObject {
       this.parseCommitBodyString(commitBodyStr);
     }
     this.size = this.commitBodyBuffer.length;
-
-    if (packFile && packFile.header.size !== this.size) {
-      throw new Error(
-        `Pack file size <${
-          packFile.header.size
-        }> does not match calculated commit size <${
-          this.size
-        }>\nEXPECTED:\n${packFile.data.toString()}\nACTUAL:\n${this.commitBodyBuffer.toString()}`
-      );
-    }
   }
 
-  // private get formattedTimestamp() {
-  //   return `${Math.floor(
-  //     this.timestamp.getTime() / 1000
-  //   )} ${getTimezoneOffsetString(this.timestamp)}`;
-  // }
-
   private parseCommitBodyString(str: string): void {
-    const lines = str.split("\n").filter((l) => l);
+    let body = str;
+    let lines: string[] = [];
+    if (str.includes(CONSTANTS.NULL_BYTE)) {
+      // Discard header
+      body = str.split(CONSTANTS.NULL_BYTE)[1];
+    }
+    lines = body.split("\n").filter((l) => l);
     this.treeSha = this.findMatchingLine("tree", lines);
     this.parentSha = this.findMatchingLine("parent", lines);
     this.author = this.parseIdString(
-      this.findMatchingLine("author", lines, false)
+      this.findMatchingLine("author", lines, false),
     );
     this.committer = this.parseIdString(
-      this.findMatchingLine("committer", lines, false)
+      this.findMatchingLine("committer", lines, false),
     );
     this.message = lines[lines.length - 1];
   }
@@ -98,14 +89,16 @@ export class GitCommit extends GitObject {
   }
 
   toBuffer(): Buffer {
-    const header = Buffer.from(`${this.type} ${this.size}\0`);
+    const header = Buffer.from(
+      `${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`,
+    );
     return Buffer.concat([header, this.commitBodyBuffer]);
   }
 
   private findMatchingLine(
     prefix: "tree" | "parent" | "author" | "committer",
     lines: string[],
-    removePrefix: boolean = true
+    removePrefix: boolean = true,
   ): string {
     const line = lines.find((l) => l.startsWith(`${prefix} `));
     if (removePrefix && line) {

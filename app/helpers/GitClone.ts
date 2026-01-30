@@ -1,5 +1,14 @@
-import zlib from "node:zlib";
-import { BIT_MASKS, CONSTANTS, PackFileObjectTypeEnum } from "../constants";
+import zlib from "zlib";
+import fs from "fs";
+import path from "path";
+import debug from "debug";
+import {
+  BIT_MASKS,
+  CONSTANTS,
+  FileModeEnum,
+  GitObjectTypeEnum,
+  PackFileObjectTypeEnum,
+} from "../constants";
 import type { PackFileObject, PackFileObjectHeader } from "../types";
 import {
   hexToDecimal,
@@ -11,7 +20,7 @@ import {
 import GitHelper from "./GitHelper";
 import { GitBlob, GitCommit, GitObject, GitTree } from "../objects";
 
-const { FLUSH_PKT, HEAD, NULL_BYTE } = CONSTANTS;
+const { FLUSH_PKT, NULL_BYTE } = CONSTANTS;
 
 // Below is a sample git reference file
 // The first four (hex) digits tell us how many bytes the line is, including the length header
@@ -42,26 +51,26 @@ const services = {
   gitUploadPack: "service=git-upload-pack",
 };
 
-export const clone = async (url: string, dest: string): Promise<void> => {
+export const clone = async (url: string, cloneDir: string): Promise<void> => {
   const refFile = await fetchRefs(url);
-  GitHelper.initGitDirs(refFile.HEAD, dest);
+  GitHelper.initGitDirs(refFile.HEAD, cloneDir);
   const wantLines: WantLine[] = refFile.refs.map(
-    (ref) => new WantLine(ref.sha)
+    (ref) => new WantLine(ref.sha),
   );
   const packFile = await fetchPackFile(url, wantLines);
   packFile.objects.forEach((packFileObj) => {
     const { header } = packFileObj;
     switch (header.type) {
       case PackFileObjectTypeEnum.COMMIT:
-        const commit = new GitCommit({ packFile: packFileObj }, dest);
+        const commit = new GitCommit({ packFile: packFileObj }, cloneDir);
         commit.write();
         break;
       case PackFileObjectTypeEnum.TREE:
-        const tree = new GitTree({ packFile: packFileObj }, dest);
+        const tree = new GitTree({ packFile: packFileObj }, cloneDir);
         tree.write();
         break;
       case PackFileObjectTypeEnum.BLOB:
-        const blob = new GitBlob({ packFile: packFileObj }, dest);
+        const blob = new GitBlob({ packFile: packFileObj }, cloneDir);
         blob.write();
         break;
       case PackFileObjectTypeEnum.TAG:
@@ -71,14 +80,37 @@ export const clone = async (url: string, dest: string): Promise<void> => {
         console.warn("OFS Delta not implemented");
         break;
       case PackFileObjectTypeEnum.REF_DELTA:
-        const refDelta = new RefDelta(packFileObj, dest);
-        const object = refDelta.getTargetObject(dest);
+        const refDelta = new RefDelta(packFileObj, cloneDir);
+        const object = refDelta.getTargetObject(cloneDir);
         object.write();
         break;
     }
   });
-
+  checkoutCommit(refFile.headSha, cloneDir);
   // Clone completed
+};
+
+const checkoutCommit = (commitId: string, baseDir: string) => {
+  const commit = GitHelper.loadFromSha(commitId, baseDir) as GitCommit;
+
+  const checkoutTree = (treeId: string, entryDir: string) => {
+    if (!fs.existsSync(entryDir)) fs.mkdirSync(entryDir);
+    const tree = GitHelper.loadFromSha(treeId, baseDir) as GitTree;
+
+    for (const entry of tree.entries) {
+      const entryPath = path.resolve(entryDir, entry.filename);
+      if (entry.mode === FileModeEnum.Directory) {
+        checkoutTree(entry.getHash, entryPath);
+        continue;
+      }
+
+      const blob = GitHelper.loadFromSha(entry.getHash, baseDir) as GitBlob;
+      fs.writeFileSync(entryPath, blob.content, { encoding: "utf-8" });
+      fs.chmodSync(entryPath, parseInt(`${blob.mode}`, 8));
+    }
+  };
+
+  checkoutTree(commit.treeSha, baseDir);
 };
 
 const fetchRefs = async (url: string): Promise<ReferenceFile> => {
@@ -90,13 +122,13 @@ const fetchRefs = async (url: string): Promise<ReferenceFile> => {
 
   if (text.slice(-4) !== FLUSH_PKT) {
     throw new Error(
-      `Reference file missing flush packet at end of response. Actual: "${text}"`
+      `Reference file missing flush packet at end of response. Actual: "${text}"`,
     );
   }
   const lines = parsePayload(text);
   // Verify response begins with the service name
   if (lines[0] !== `# ${services.gitUploadPack}`) {
-    console.log(services.gitUploadPack);
+    debug("clone:fetchRefs")(services.gitUploadPack);
     throw new Error(`Invalid reference file header: "${lines[0]}"`);
   }
   const refFile: ReferenceFile = {
@@ -130,7 +162,7 @@ const fetchRefs = async (url: string): Promise<ReferenceFile> => {
 
 const fetchPackFile = async (
   url: string,
-  wantLines: WantLine[]
+  wantLines: WantLine[],
 ): Promise<PackFile> => {
   const body = Buffer.concat([
     ...wantLines.map((wl) => wl.toBuffer()),
@@ -157,7 +189,7 @@ const parsePayload = (payload: string): string[] => {
   const validationBytes = payload.slice(0, 6);
   if (!validationBytes.match(referenceFileValidationRegex)) {
     throw new Error(
-      `Invalid reference file pack. First 5 bytes must match ${referenceFileValidationRegex}. Actual: ${validationBytes}`
+      `Invalid reference file pack. First 5 bytes must match ${referenceFileValidationRegex}. Actual: ${validationBytes}`,
     );
   }
 
@@ -265,7 +297,7 @@ class PackFile {
 
       const { buffer: decompressedData, engine } = zlib.inflateSync(
         this.raw.subarray(offset),
-        { info: true }
+        { info: true },
       ) as Buffer & { engine: zlib.Inflate };
       offset += engine.bytesWritten;
 
@@ -286,6 +318,7 @@ class RefDelta {
   private targetBuffer: Buffer;
   private sourceSize: number;
   private targetSize: number;
+  private sourceType: GitObjectTypeEnum;
 
   constructor(deltaPackfileObject: PackFileObject, baseDir: string) {
     this.deltaBuffer = deltaPackfileObject.data;
@@ -303,13 +336,14 @@ class RefDelta {
     // Load source object from disk
     const sourceObject = GitHelper.loadFromSha(
       deltaPackfileObject.header.reference!,
-      baseDir
+      baseDir,
     );
-    this.sourceBuffer = sourceObject.buffer;
+    this.sourceBuffer = sourceObject.content;
+    this.sourceType = sourceObject.type;
 
     if (sourceObject.size !== this.sourceSize) {
       throw new Error(
-        `Source object may be corrupted: expected ${this.sourceSize} bytes in size, got ${this.sourceBuffer.length}`
+        `Source object size mismatch for SHA ${deltaPackfileObject.header.reference}: expected ${this.sourceSize}, got ${sourceObject.size}. The source object may have been corrupted by a previous delta.`,
       );
     }
     // Build target object by parsing instructions
@@ -323,38 +357,37 @@ class RefDelta {
 
     // Build target object
     while (offset < this.deltaBuffer.length) {
-      const first = this.deltaBuffer[offset];
+      const instruction = this.deltaBuffer[offset];
       offset++;
-      if (getMSB(first) === 1) {
-        // Copy instruction
+      if (getMSB(instruction) === 1) {
         let copyOffset = 0;
         let copySize = 0;
 
-        if (first & 0x01) {
+        if (instruction & 0x01) {
           copyOffset |= this.deltaBuffer[offset];
           offset += 1;
         }
-        if (first & 0x02) {
+        if (instruction & 0x02) {
           copyOffset |= this.deltaBuffer[offset] << 8;
           offset += 1;
         }
-        if (first & 0x04) {
+        if (instruction & 0x04) {
           copyOffset |= this.deltaBuffer[offset] << 16;
           offset += 1;
         }
-        if (first & 0x08) {
+        if (instruction & 0x08) {
           copyOffset |= this.deltaBuffer[offset] << 24;
           offset += 1;
         }
-        if (first & 0x10) {
+        if (instruction & 0x10) {
           copySize |= this.deltaBuffer[offset];
           offset += 1;
         }
-        if (first & 0x20) {
+        if (instruction & 0x20) {
           copySize |= this.deltaBuffer[offset] << 8;
           offset += 1;
         }
-        if (first & 0x40) {
+        if (instruction & 0x40) {
           copySize |= this.deltaBuffer[offset] << 16;
           offset += 1;
         }
@@ -363,75 +396,39 @@ class RefDelta {
           copySize = 0x10000;
         }
 
-        out.push(this.sourceBuffer.subarray(copyOffset, copyOffset + copySize));
+        const data = this.sourceBuffer.subarray(
+          copyOffset,
+          copyOffset + copySize,
+        );
+        out.push(data);
         outLength += copySize;
-
-        //   let copyOffset = 0;
-        //   let copySize = 0;
-
-        //   // Parse additional offset bytes (bits 0-3 of first indicate extras)
-        //   // These 4 bits are the low 4 of the offset amount and also tell us how many of the following bytes belong to it
-        //   let shift = 0;
-        //   for (let i = 0; i < 4; i++) {
-        //     // Check if the nth bit is set
-        //     // 1 << 0 => 0000 0001; Checking if bit 0 is set
-        //     // 1 << 1 => 0000 0010; Checking if bit 1 is set
-        //     // etc.
-        //     if (first & (1 << i)) {
-        //       copyOffset |= this.deltaBuffer[offset] << shift;
-        //       offset++;
-        //       shift += 8;
-        //     }
-        //   }
-
-        //   // Parse additional size bytes (bits 4-6 of first indicate extras)
-        //   shift = 0;
-        //   // Start loop at 4 to correspond with the position of the size data in `first`
-        //   for (let i = 4; i < 7; i++) {
-        //     if (first & (1 << i)) {
-        //       copySize |= this.deltaBuffer[offset] << shift;
-        //       offset++;
-        //       shift += 8;
-        //     }
-        //   }
-        //   if (copySize === 0) {
-        //     copySize = 0x10000;
-        //   }
-
-        //   // Copy from source and append to target
-        //   const data = this.sourceBuffer.subarray(
-        //     copyOffset,
-        //     copyOffset + copySize
-        //   );
-        //   console.log(`copyDataBuffer\n${data.toString()}`);
-        //   this.targetBuffer = Buffer.concat([this.targetBuffer, data]);
       } else {
         // Add instruction
-        const insertSize = first;
-        out.push(this.deltaBuffer.subarray(offset, offset + insertSize));
+        const insertSize = instruction & BIT_MASKS.LOW_7;
+        const data = this.deltaBuffer.subarray(offset, offset + insertSize);
+        out.push(data);
         offset += insertSize;
         outLength += insertSize;
-
-        // const addSize = first; // MSB=0, so value is the size
-        // const data = this.deltaBuffer.subarray(offset, offset + addSize);
-        // console.log(`addDataBuffer\n${data.toString()}`);
-        // offset += addSize;
-        // this.targetBuffer = Buffer.concat([this.targetBuffer, data]);
       }
     }
     this.targetBuffer = Buffer.concat(out);
-
-    if (this.targetBuffer.length !== this.targetSize) {
-      // console.log(`Source Buffer:\n${this.sourceBuffer.toString()}`);
-      // console.log(`Target Buffer:\n${this.targetBuffer.toString()}`);
+    if (
+      this.targetBuffer.length !== this.targetSize ||
+      outLength !== this.targetSize
+    ) {
       throw new Error(
-        `Target size mismatch: expected ${this.targetSize}, got ${this.targetBuffer.length}.`
+        `Target size mismatch: expected ${this.targetSize}, targetBuffer.length: ${this.targetBuffer.length}, outLength: ${outLength}.`,
       );
     }
   }
 
   getTargetObject(baseDir: string): GitObject {
-    // console.log({ target: this.targetBuffer.toString() });
-    return GitHelper.loadFromBuffer(this.targetBuffer, baseDir);
+    const header = Buffer.from(
+      `${this.sourceType} ${this.targetSize}${CONSTANTS.NULL_BYTE}`,
+    );
+    return GitHelper.loadFromBuffer(
+      Buffer.concat([header, this.targetBuffer]),
+      baseDir,
+    );
   }
 }

@@ -1,4 +1,5 @@
 import {
+  CONSTANTS,
   FileModeEnum,
   GitObjectTypeEnum,
   PackFileObjectTypeEnum,
@@ -19,6 +20,7 @@ export class GitTree extends GitFileObject {
   type: GitObjectTypeEnum = GitObjectTypeEnum.Tree;
   mode: FileModeEnum = FileModeEnum.Directory;
   entries: GitFileObject[] = [];
+  private originalPackFileData: Buffer | null = null;
 
   constructor(options: GitObjectOptions = {}, baseDir: string) {
     super(options, baseDir);
@@ -37,15 +39,19 @@ export class GitTree extends GitFileObject {
       if (packFile.header.type !== PackFileObjectTypeEnum.TREE) {
         throw new Error("Pack file is not a tree");
       }
+      // Preserve the original packFile data for accurate serialization
+      this.originalPackFileData = packFile.data;
       this.parsePackFile(packFile);
       if (packFile.header.size !== this.size) {
         throw new Error(
-          `Pack file size <${packFile.header.size}> does not match calculated commit size <${this.size}>`
+          `Pack file size <${packFile.header.size}> does not match calculated commit size <${this.size}>`,
         );
       }
       // Compute and preserve the hash from the original packFile data
       const originalBuffer = Buffer.concat([
-        Buffer.from(`${this.type} ${packFile.header.size}\0`),
+        Buffer.from(
+          `${this.type} ${packFile.header.size}${CONSTANTS.NULL_BYTE}`,
+        ),
         packFile.data,
       ]);
       this.hash = generateSha1Hash(originalBuffer);
@@ -54,7 +60,8 @@ export class GitTree extends GitFileObject {
 
   private parsePackFile(packFile: PackFileObject) {
     this.parseBuffer(packFile.data, true);
-    this.size = this.calculateSize();
+    // Use the packFile header size, not the calculated size, to ensure byte-for-byte consistency
+    this.size = packFile.header.size;
   }
 
   private parseBuffer(buffer: Buffer, skipHeader?: Boolean) {
@@ -101,6 +108,7 @@ export class GitTree extends GitFileObject {
         const blob = new GitBlob({}, this.baseDir);
         blob.hash = sha;
         blob.filename = name;
+        blob.mode = mode;
         this.entries.push(blob);
       }
     }
@@ -147,22 +155,42 @@ export class GitTree extends GitFileObject {
       this.entries
         .map(
           (entry) =>
-            `${entry.mode} ${entry.type} ${entry.getHash}    ${entry.filename}`
+            `${entry.mode} ${entry.type} ${entry.getHash}    ${entry.filename}`,
         )
         .join("\n") + (this.entries.length > 0 ? "\n" : "")
     );
   }
 
   write(): void {
-    this.entries.forEach((entry) => entry.write());
-    this.size = this.calculateSize();
+    // Write entries that are real objects (created from filepath or loaded from disk)
+    // Skip entries that are just parsed references from tree data (they have size 0 and no content)
+    this.entries.forEach((entry) => {
+      // Write if the entry has content/size set (it's a real object)
+      if (entry.size > 0) {
+        entry.write();
+      }
+    });
+
+    // IMPORTANT: Only recalculate size if we don't have original packFile data
+    // If we're reconstructing from packFile, we must preserve the exact size
+    if (this.originalPackFileData === null) {
+      this.size = this.calculateSize();
+    }
+    // log(`writing tree: ${this.getHash}, ${this.type} ${this.size}`);
+    // log(this.buffer.toString());
     super.write();
   }
 
   toBuffer(): Buffer {
+    // If we have the original packFile data, use it to ensure byte-for-byte consistency
+    if (this.originalPackFileData !== null) {
+      const header = `${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`;
+      return Buffer.concat([Buffer.from(header), this.originalPackFileData]);
+    }
+
     // "tree <size>\0" + entries
     const entries = this.entries.map((e) => e.toTreeBuffer());
-    const header = `${this.type} ${this.size}\0`;
+    const header = `${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`;
     const buf = Buffer.concat([Buffer.from(header), ...entries]);
     return buf;
   }

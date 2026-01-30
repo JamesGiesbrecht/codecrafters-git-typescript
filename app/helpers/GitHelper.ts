@@ -11,7 +11,7 @@ export default class GitHelper {
       baseDir,
       GIT_DIRS.OBJECTS,
       sha.substring(0, 2),
-      sha.substring(2)
+      sha.substring(2),
     );
     if (!fs.existsSync(file)) {
       throw new Error(`File not found at ${file}: ${sha}`);

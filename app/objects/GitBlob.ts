@@ -1,21 +1,18 @@
 import fs from "fs";
 import path from "path";
 import {
+  CONSTANTS,
   FileModeEnum,
   GitObjectTypeEnum,
   PackFileObjectTypeEnum,
 } from "../constants";
-import { getFileModeFromPath, readUntilNullByte } from "../helpers/utils";
+import { readUntilNullByte } from "../helpers/utils";
 import GitHelper from "../helpers/GitHelper";
 import { GitFileObject, type GitObjectOptions } from "./GitObject";
-import type { PackFileObject } from "../types";
 
 export class GitBlob extends GitFileObject {
   type: GitObjectTypeEnum = GitObjectTypeEnum.Blob;
-
-  get mode(): FileModeEnum {
-    return getFileModeFromPath(this.gitDir);
-  }
+  mode: FileModeEnum = FileModeEnum.File;
 
   constructor(options: GitObjectOptions = {}, baseDir: string) {
     super(options, baseDir);
@@ -38,18 +35,9 @@ export class GitBlob extends GitFileObject {
       if (packFile.header.type !== PackFileObjectTypeEnum.BLOB) {
         throw new Error("Pack file is not a blob");
       }
-      this.parsePackFile(packFile);
-      if (packFile.header.size !== this.size) {
-        throw new Error(
-          `Pack file size <${packFile.header.size}> does not match calculated commit size <${this.size}>`
-        );
-      }
+      this.size = packFile.header.size;
+      this.content = packFile.data;
     }
-  }
-
-  private parsePackFile(packFile: PackFileObject) {
-    this.size = packFile.data.length;
-    this.content = packFile.data;
   }
 
   private parseBuffer(buffer: Buffer) {
@@ -59,11 +47,14 @@ export class GitBlob extends GitFileObject {
       throw new Error(`Invalid type ${type}`);
     }
     this.size = Number(size);
-    this.content = buffer.subarray(line.offset);
+    // Extract EXACTLY the number of bytes specified in the header, not all remaining bytes
+    const contentStart = line.offset;
+    const contentEnd = contentStart + this.size;
+    this.content = buffer.subarray(contentStart, contentEnd);
   }
 
   toBuffer(): Buffer {
-    const header = `${this.type} ${this.size}\0`;
+    const header = `${this.type} ${this.size}${CONSTANTS.NULL_BYTE}`;
     return Buffer.concat([Buffer.from(header), this.content]);
   }
 }

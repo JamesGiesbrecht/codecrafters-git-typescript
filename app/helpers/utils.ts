@@ -163,9 +163,9 @@ export const decodeSizeWithMSB = (
   while (hasMore) {
     const next = buffer[offset];
     size |= (next & BIT_MASKS.LOW_7) << shift;
+    offset++;
     hasMore = getMSB(next) !== 0;
     shift += 7;
-    offset++;
   }
 
   return { size, offset };

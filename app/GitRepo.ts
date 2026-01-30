@@ -4,11 +4,13 @@ import { GitBlob, GitCommit, GitTree } from "./objects";
 import GitHelper from "./helpers/GitHelper";
 import path from "path";
 import { clone } from "./helpers/GitClone";
+import debug from "debug";
 
 export default class GitRepo {
+  private static log = debug("git:repo");
   public static async init() {
     GitHelper.initGitDirs(DEFAULT_REF, ".");
-    console.log("Initialized git directory");
+    this.log("Initialized git directory");
   }
 
   public static catFile(sha: string): string {
@@ -54,7 +56,8 @@ export default class GitRepo {
     if (!dest) {
       dest = path.basename(url, ".git");
     }
-    console.log(`Cloning "${url}" to "${dest}"`);
+    this.log(`Cloning "${url}" to "${dest}"`);
     await clone(url, dest);
+    this.log("Clone Complete");
   }
 }
