@@ -1,98 +1,239 @@
 [![progress-banner](https://backend.codecrafters.io/progress/git/a4abbf06-b236-4bd4-aee2-3b580852da82)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
-This is a starting point for TypeScript solutions to the
-["Build Your Own Git" Challenge](https://codecrafters.io/challenges/git).
+# 🔧 Git Implementation in TypeScript
 
-In this challenge, you'll build a small Git implementation that's capable of
-initializing a repository, creating commits and cloning a public repository.
-Along the way we'll learn about the `.git` directory, Git objects (blobs,
-commits, trees etc.), Git's transfer protocols and more.
+A lightweight implementation of core Git functionality built from scratch in TypeScript/Bun. This project implements Git's internal object model, packfile protocol, and essential commands for version control operations.
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+## 📋 Overview
 
-# Passing the first stage
+This is a functional Git implementation that handles:
 
-The entry point for your Git implementation is in `app/main.ts`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+- Repository initialization
+- Object storage and retrieval (blobs, trees, commits)
+- Hash object creation and manipulation
+- Tree operations and directory traversal
+- Commit creation with parent tracking
+- Repository cloning with packfile parsing
+- Working directory checkout
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
+Built as part of the [CodeCrafters](https://codecrafters.io) "Build Your Own Git" challenge.
+
+## ✨ Features
+
+### 🎯 **Core Commands**
+
+- **`init`** - Initialize a new Git repository
+- **`cat-file`** - Display contents of Git objects
+- **`hash-object`** - Create blob objects from files
+- **`ls-tree`** - List contents of tree objects
+- **`write-tree`** - Create tree objects from working directory
+- **`commit-tree`** - Create commit objects with metadata
+- **`clone`** - Clone remote repositories with full packfile support
+
+### 🔐 **Git Internals**
+
+- **Object Storage**: Implements Git's content-addressable storage using SHA-1 hashing
+- **Compression**: Uses zlib deflate/inflate for efficient storage
+- **Packfile Protocol**: Full support for Git's packfile format including:
+  - Pack header parsing
+  - Object type identification (blob, tree, commit, tag)
+  - Delta compression (ref-delta and ofs-delta)
+  - Checksum validation
+
+### 🌳 **Object Model**
+
+Supports all core Git object types:
+
+- **Blobs** - File content storage
+- **Trees** - Directory structure
+- **Commits** - Snapshots with metadata
+- **Tags** - Named references (parsing support)
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Bun** 1.1 or higher ([Install Bun](https://bun.sh))
+- Basic understanding of Git concepts
+
+### Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone <repository-url>
+   cd git-implementation
+   ```
+
+2. **Install dependencies**
+
+   ```bash
+   bun install
+   ```
+
+3. **Run locally**
+
+   ```bash
+   ./your_program.sh <command> [args...]
+   ```
+
+## 📖 Usage
+
+### Initialize a Repository
+
+```bash
+./your_program.sh init
 ```
 
-That's all!
+Creates a new `.git` directory with the standard structure:
 
-# Stage 2 & beyond
-
-Note: This section is for stages 2 and beyond.
-
-1. Ensure you have `bun (1.2)` installed locally
-1. Run `./your_program.sh` to run your Git implementation, which is implemented
-   in `app/main.ts`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
-
-# Testing locally
-
-The `your_program.sh` script is expected to operate on the `.git` folder inside
-the current working directory. If you're running this inside the root of this
-repository, you might end up accidentally damaging your repository's `.git`
-folder.
-
-We suggest executing `your_program.sh` in a different folder when testing
-locally. For example:
-
-```sh
-mkdir -p /tmp/testing && cd /tmp/testing
-/path/to/your/repo/your_program.sh init
+```
+.git/
+├── objects/
+├── refs/
+└── HEAD
 ```
 
-To make this easier to type out, you could add a
-[shell alias](https://shapeshed.com/unix-alias/):
+### Read Object Contents
 
-```sh
-alias mygit=/path/to/your/repo/your_program.sh
-
-mkdir -p /tmp/testing && cd /tmp/testing
-mygit init
+```bash
+./your_program.sh cat-file -p <object-hash>
 ```
 
-# Local CLI Testing
+Displays the contents of a Git object (blob, tree, commit, or tag).
 
-1. Pull codecrafters `git-tester` submodule
+### Create Object from File
 
-    ```sh
-    git submodule update --init --recursive
-    ```
+```bash
+./your_program.sh hash-object -w <file-path>
+```
 
-2. Build `git-tester` binary
+Creates a blob object from a file and writes it to `.git/objects/`.
 
-    ```sh
-    bun test:build
-    ```
+### List Tree Contents
 
-3. Install dependencies
+```bash
+./your_program.sh ls-tree --name-only <tree-hash>
+```
 
-    ```sh
-    bun install
-    ```
+Lists all files and directories in a tree object.
 
-4. Create `.env` and set `CURRENT_STAGE` variable
+### Create Tree from Working Directory
 
-    ```sh
-    echo "CURRENT_STAGE=1" > .env
-    ```
+```bash
+./your_program.sh write-tree
+```
 
-5. Run codecrafters tests locally
+Recursively creates tree objects for the current directory structure.
 
-    ```sh
-    bun test
-    ```
+### Create a Commit
 
-# Resources
+```bash
+./your_program.sh commit-tree <tree-hash> -p <parent-hash> -m "Commit message"
+```
 
-## Git Clone
+Creates a commit object with the specified tree and parent commit.
+
+### Clone a Repository
+
+```bash
+./your_program.sh clone <repository-url> <directory>
+```
+
+Clones a remote repository including:
+
+- Fetching all objects via packfile
+- Parsing delta-compressed objects
+- Checking out the working directory
+- Setting up HEAD and refs
+
+## 🔍 Technical Details
+
+### Object Storage Format
+
+Git objects are stored in `.git/objects/<xx>/<yy...>` where `<xxyy...>` is the SHA-1 hash.
+
+**Object Format:**
+
+```txt
+<type> <size>\0<content>
+```
+
+### Tree Object Format
+
+```txt
+<mode> <name>\0<20-byte-hash><mode> <name>\0<20-byte-hash>
+```
+
+**Modes:**
+
+- `100644` - Regular file
+- `100755` - Executable file
+- `40000` - Directory (tree)
+- `120000` - Symbolic link
+
+### Commit Object Format
+
+```txt
+tree <tree-hash>
+parent <parent-hash>
+author <name> <email> <timestamp> <timezone>
+committer <name> <email> <timestamp> <timezone>
+
+<commit message>
+```
+
+### Packfile Format
+
+**Header:**
+
+```txt
+PACK<version><object-count>
+```
+
+## 🧪 Testing
+
+### Codecrafters
+
+Run tests against the CodeCrafters CLI:
+
+```sh
+codecrafters test
+```
+
+### Local Testing
+
+Pull codecrafters `git-tester` submodule:
+
+  ```sh
+  git submodule update --init --recursive
+  ```
+
+Build `git-tester` binary
+
+  ```sh
+  bun test:build
+  ```
+
+Install dependencies
+
+  ```sh
+  bun install
+  ```
+
+Create `.env` and set `CURRENT_STAGE` variable
+
+  ```sh
+  echo "CURRENT_STAGE=1" > .env
+  ```
+
+Run codecrafters tests locally
+
+  ```sh
+  bun test codecrafters
+  ```
+
+## 📄 Resources
 
 - [Git-Protocol Forum Guide](https://i27ae15.github.io/git-protocol-doc/docs/git-protocol/intro)
 - [git http-protocol](https://git-scm.com/docs/http-protocol)

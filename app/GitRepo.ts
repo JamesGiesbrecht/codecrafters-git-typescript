@@ -26,7 +26,7 @@ export default class GitRepo {
 
   public static lsTree(
     sha: string,
-    flags: ParsedArgs = DEFAULT_PARSED_ARGS
+    flags: ParsedArgs = DEFAULT_PARSED_ARGS,
   ): string {
     const tree = new GitTree({ sha }, ".");
     const nameOnly = flags["name-only"] === true;
@@ -42,7 +42,7 @@ export default class GitRepo {
   public static commitTree(
     treeSha: string,
     parentSha: string,
-    message: string
+    message: string,
   ): string {
     const commit = new GitCommit({ treeSha, parentSha, message }, ".");
     commit.write();
@@ -51,7 +51,7 @@ export default class GitRepo {
 
   public static async clone(url: string, dest: string): Promise<void> {
     if (!url) {
-      url = process.env.GIT_CLONE_URL as string;
+      throw new Error("No URL provided");
     }
     if (!dest) {
       dest = path.basename(url, ".git");

@@ -1,7 +1,7 @@
 import { $, stripANSI } from "bun";
 import { expect, test } from "bun:test";
 // @ts-ignore
-import { stages as courseStages } from "./git-tester/internal/test_helpers/course_definition.yml";
+import { stages as courseStages } from "./codecrafters-tester/internal/test_helpers/course_definition.yml";
 
 const { CURRENT_STAGE } = process.env;
 
@@ -30,8 +30,8 @@ const runTest = async (stage: Stage) => {
       await $`
         export CODECRAFTERS_REPOSITORY_DIR=$(pwd)
         export CODECRAFTERS_TEST_CASES_JSON=${testJson}
-        $(pwd)/git-tester/dist/main.out
-      `.text()
+        $(pwd)/codecrafters-tester/dist/main.out
+      `.text(),
     );
   } catch (error) {
     const err = error as any;

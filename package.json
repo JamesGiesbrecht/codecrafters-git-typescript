@@ -7,7 +7,7 @@
   "description": "Build your own Git challenge, from CodeCrafters",
   "scripts": {
     "dev": "bun run app/main.ts",
-    "test:build": "cd git-tester && make build",
+    "test:build": "cd codecrafters-tester && make build",
     "challenge": "open -a 'Google Chrome' https://app.codecrafters.io/courses/git/overview",
     "test:clone": "rm -rf test-clone && ./your_program.sh clone https://git.goose.fans/JamesGiesbrecht/unraid-dotfiles.git test-clone"
   },

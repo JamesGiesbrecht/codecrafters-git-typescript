@@ -1,3 +1,3 @@
-[submodule "git-tester"]
-	path = git-tester
-	url = ./git-tester
+[submodule "codecrafters-tester"]
+	path = codecrafters-tester
+	url = git@github.com:codecrafters-io/git-tester.git
