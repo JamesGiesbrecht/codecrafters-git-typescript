@@ -1,5 +1,5 @@
 import { $, stripANSI } from "bun";
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 // @ts-ignore
 import { stages as courseStages } from "./codecrafters-tester/internal/test_helpers/course_definition.yml";
 
@@ -33,22 +33,50 @@ const runTest = async (stage: Stage) => {
         $(pwd)/codecrafters-tester/dist/main.out
       `.text(),
     );
+    expect(result).toContain(stage.title);
+    expect(result).toContain(`[${stage.tester_log_prefix}] Test passed.\n`);
   } catch (error) {
     const err = error as any;
     console.log(`Failed with code ${err.exitCode}`);
-    console.log(err.stdout.toString());
+    throw new Error(err.stdout?.toString() || err);
   }
-  expect(result).toContain(stage.title);
-  expect(result).toEndWith(`[${stage.tester_log_prefix}] Test passed.\n`);
 };
 
 // Get the tests for the current step in the path
 // EX: CURRENT_STAGE=3 runs the first 3 stages
 const testStages = stages.slice(0, Number(CURRENT_STAGE));
 
+let allTestsPassed = true;
+
+console.log(
+  `🧪 Running ${testStages.length} test stages of ${stages.length}\n`,
+);
+
 // Generate individual test cases for each stage
 testStages.forEach((testStage) => {
   test(testStage.title, async () => {
-    await runTest(testStage);
+    try {
+      await runTest(testStage);
+    } catch (error) {
+      allTestsPassed = false;
+      throw error;
+    }
   });
+});
+
+afterAll(() => {
+  if (allTestsPassed) {
+    if (testStages.length === stages.length) {
+      console.log(
+        `\n🎉 Congratulations! All ${testStages.length} stages passed.`,
+      );
+    } else {
+      console.log(
+        `\n🎉 Stage ${CURRENT_STAGE} passed. Update CURRENT_STAGE for the next stage.\n`,
+      );
+      console.log(
+        `$ sed -i '' 's/^CURRENT_STAGE=.*/CURRENT_STAGE=${Number(CURRENT_STAGE) + 1}/' .env`,
+      );
+    }
+  }
 });

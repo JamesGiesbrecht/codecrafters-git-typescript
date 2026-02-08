@@ -4,6 +4,8 @@
 
 A lightweight implementation of core Git functionality built from scratch in TypeScript/Bun. This project implements Git's internal object model, packfile protocol, and essential commands for version control operations.
 
+Built as part of the [CodeCrafters](https://codecrafters.io) "Build your own Git" challenge.
+
 ## 📋 Overview
 
 This is a functional Git implementation that handles:
@@ -62,7 +64,7 @@ Supports all core Git object types:
 
    ```bash
    git clone <repository-url>
-   cd git-implementation
+   cd codecrafters-git-typescript
    ```
 
 2. **Install dependencies**
