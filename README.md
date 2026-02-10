@@ -214,7 +214,7 @@ Pull codecrafters `git-tester` submodule:
 Build `git-tester` binary
 
   ```sh
-  bun test:build
+  bun build:tester
   ```
 
 Install dependencies
